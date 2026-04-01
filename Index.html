@@ -1,0 +1,2693 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#2563eb">
+    <title>ระบบยืม-คืนหนังสือ ITTHI</title>
+
+    <link rel="icon" type="image/png" href="https://img.icons8.com/color/48/book-shelf.png">
+
+    <!-- Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Scanners & Generators & Charts -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+            background-color: #f1f5f9;
+        }
+
+        /* Navigation Styles */
+        .nav-item.active {
+            background-color: #eff6ff;
+            color: #2563eb;
+            border-right: 4px solid #2563eb;
+            font-weight: 600;
+        }
+
+        .mobile-nav-item.active {
+            color: #2563eb;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Scanner UI Override */
+        #reader {
+            width: 100%;
+            border-radius: 1rem;
+            overflow: hidden;
+            border: 2px dashed #94a3b8 !important;
+        }
+
+        #reader__scan_region {
+            background: #ffffff;
+        }
+
+        #reader button {
+            display: none;
+        }
+
+        #reader__dashboard_section_csr span {
+            color: #ef4444 !important;
+            font-size: 14px;
+        }
+
+        /* Modal Component Helper */
+        .asset-tag-only {
+            transition: all 0.2s;
+        }
+
+        /* Book View Toggler & Filter */
+        .view-toggle-btn.active {
+            background-color: white;
+            color: #2563eb;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .filter-btn.active {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+        }
+
+        /* Sorting Header */
+        .sortable-header {
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.2s;
+        }
+
+        .sortable-header:hover {
+            color: #2563eb;
+        }
+
+        .sort-icon {
+            display: inline-block;
+            width: 14px;
+            text-align: center;
+            opacity: 0.3;
+            transition: all 0.2s;
+        }
+
+        .sortable-header.active .sort-icon {
+            opacity: 1;
+            color: #2563eb;
+        }
+    </style>
+</head>
+
+<body class="text-slate-800 flex h-screen overflow-hidden select-none md:select-auto">
+
+    <!-- ================= SIDEBAR (DESKTOP) ================= -->
+    <aside id="desktop-sidebar"
+        class="hidden md:flex flex-col w-64 bg-white border-r border-slate-200 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-20 h-full transition-all duration-300">
+        <div class="p-6 flex items-center space-x-4 border-b border-slate-100">
+            <div
+                class="w-10 h-10 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-cyan-200">
+                <i class="fa-solid fa-book-open-reader text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg text-slate-800 tracking-wide leading-tight">ITTHI <span
+                        class="text-cyan-600">ยืมหนังสือ</span></h1>
+                <p class="text-[10px] text-slate-500 font-medium">ระบบยืม-คืน หนังสือ</p>
+            </div>
+        </div>
+        <nav class="flex-1 py-6 space-y-2 overflow-y-auto px-3">
+            <button onclick="switchView('dashboard')" id="nav-dashboard"
+                class="nav-item active w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 transition-all">
+                <i class="fa-solid fa-chart-pie w-6 text-center"></i><span>ภาพรวมระบบ</span>
+            </button>
+            <button onclick="switchView('scan')" id="nav-scan"
+                class="nav-item w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 transition-all">
+                <i class="fa-solid fa-expand w-6 text-center"></i><span>ยืม-คืน หนังสือ</span>
+            </button>
+            <button onclick="switchView('books')" id="nav-books"
+                class="nav-item w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 transition-all">
+                <i class="fa-solid fa-book w-6 text-center"></i><span>ฐานข้อมูลหนังสือ</span>
+            </button>
+            <button onclick="switchView('history')" id="nav-history"
+                class="nav-item w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-slate-600 hover:bg-slate-50 transition-all">
+                <i class="fa-solid fa-clock-rotate-left w-6 text-center"></i><span>ประวัติทำรายการ</span>
+            </button>
+        </nav>
+    </aside>
+
+    <!-- ================= MAIN CONTENT ================= -->
+    <main
+        class="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 relative pb-[70px] md:pb-0 transition-all duration-300">
+
+        <!-- Mobile Header -->
+        <header id="mobile-header"
+            class="md:hidden bg-white px-5 py-4 flex justify-between items-center z-10 sticky top-0 shadow-sm transition-all duration-300">
+            <div class="flex items-center space-x-3">
+                <div
+                    class="w-8 h-8 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-lg flex items-center justify-center text-white shadow-md">
+                    <i class="fa-solid fa-book-open-reader text-sm"></i>
+                </div>
+                <h1 class="font-bold text-lg text-slate-800 tracking-wide">ITTHI</h1>
+            </div>
+            <span class="relative flex h-2.5 w-2.5" title="ระบบออนไลน์">
+                <span
+                    class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+            </span>
+        </header>
+
+        <!-- Content Area -->
+        <div id="content-area" class="flex-1 overflow-y-auto p-4 md:p-8 scroll-smooth">
+
+            <!-- ================= VIEW: DASHBOARD ================= -->
+            <section id="view-dashboard" class="view-section animate-fade-in">
+                <div class="flex justify-between items-end mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-800">การวิเคราะห์</h2>
+                        <p class="text-sm text-slate-500 mt-1">สรุปข้อมูลสถิติ</p>
+                    </div>
+                    <button onclick="fetchInitialData(false)"
+                        class="w-10 h-10 rounded-full bg-white text-cyan-600 shadow-sm border border-slate-200 hover:bg-cyan-50 transition-colors flex items-center justify-center"
+                        title="รีเฟรช">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div
+                        class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden group">
+                        <div class="flex justify-between items-start mb-4 relative z-10">
+                            <div
+                                class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-book"></i></div>
+                        </div>
+                        <div class="relative z-10">
+                            <h3 class="text-3xl font-bold text-slate-800" id="stat-total">0</h3>
+                            <p class="text-sm text-slate-500 font-medium">หนังสือในระบบ</p>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden group">
+                        <div class="flex justify-between items-start mb-4 relative z-10">
+                            <div
+                                class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-check-circle"></i></div>
+                        </div>
+                        <div class="relative z-10">
+                            <h3 class="text-3xl font-bold text-slate-800" id="stat-avail">0</h3>
+                            <p class="text-sm text-slate-500 font-medium">พร้อมบริการ</p>
+                        </div>
+                    </div>
+                    <div onclick="jumpToBorrowedBooks()"
+                        class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden group cursor-pointer hover:border-amber-300 hover:shadow-md transition-all"
+                        title="คลิกเพื่อดูรายการที่ถูกยืม">
+                        <div class="flex justify-between items-start mb-4 relative z-10">
+                            <div
+                                class="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-lg group-hover:scale-110 transition-transform">
+                                <i class="fa-solid fa-hand-holding-hand"></i></div>
+                            <i
+                                class="fa-solid fa-arrow-right text-slate-300 group-hover:text-amber-500 transition-colors"></i>
+                        </div>
+                        <div class="relative z-10">
+                            <h3 class="text-3xl font-bold text-slate-800" id="stat-borrowed">0</h3>
+                            <p class="text-sm text-slate-500 font-medium group-hover:text-amber-600 transition-colors">
+                                ถูกยืมขณะนี้ (คลิกดู)</p>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between relative overflow-hidden group">
+                        <div class="flex justify-between items-start mb-4 relative z-10">
+                            <div
+                                class="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-users"></i></div>
+                        </div>
+                        <div class="relative z-10">
+                            <h3 class="text-3xl font-bold text-slate-800" id="stat-users">0</h3>
+                            <p class="text-sm text-slate-500 font-medium">จำนวนผู้ใช้งาน</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Overdue Table (เกิน 30 วัน) -->
+                <div class="bg-white rounded-2xl shadow-sm border border-red-100 p-4 md:p-6 mb-6">
+                    <h3 class="text-sm font-bold mb-4 text-red-600 flex items-center"><i
+                            class="fa-solid fa-triangle-exclamation mr-2 text-lg"></i>รายการค้างส่ง (เกิน 30 วัน)</h3>
+                    <div class="overflow-x-auto pb-2 md:pb-0">
+                        <table class="w-full text-left border-collapse whitespace-normal md:whitespace-nowrap">
+                            <thead class="bg-red-50/50 hidden md:table-header-group">
+                                <tr
+                                    class="border-b border-red-100 text-red-800 text-xs uppercase tracking-wider font-bold">
+                                    <th class="py-3 px-6 rounded-tl-lg">จำนวนวัน</th>
+                                    <th class="py-3 px-6">รหัสหนังสือ</th>
+                                    <th class="py-3 px-6">ชื่อหนังสือ</th>
+                                    <th class="py-3 px-6 rounded-tr-lg">ผู้ยืม / เบอร์โทร</th>
+                                </tr>
+                            </thead>
+                            <tbody id="overdue-list"
+                                class="text-sm space-y-3 md:space-y-0 md:divide-y divide-red-50 bg-transparent md:bg-white">
+                                <!-- Data will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Analytics Grid (Charts & Top Readers) -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                    <!-- Charts Section -->
+                    <div
+                        class="w-full bg-white rounded-2xl shadow-sm border border-slate-100 p-5 lg:col-span-2 flex flex-col">
+                        <h3 class="text-sm font-bold text-slate-700 mb-4"><i
+                                class="fa-solid fa-chart-column text-blue-500 mr-2"></i>สถิติการยืม-คืน (7 วันย้อนหลัง)
+                        </h3>
+                        <div class="relative h-64 w-full flex-grow">
+                            <canvas id="trendChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Top Readers Section -->
+                    <div class="w-full bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-col">
+                        <h3 class="text-sm font-bold text-slate-700 mb-4 flex justify-between items-center">
+                            <span><i class="fa-solid fa-medal text-amber-500 mr-2"></i>นักอ่านยอดฮิต (ยืมบ่อย)</span>
+                            <span class="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded font-medium">Top
+                                5</span>
+                        </h3>
+                        <div class="flex-grow flex flex-col justify-center">
+                            <ul id="top-readers-list" class="space-y-3">
+                                <!-- Top readers will be injected here -->
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 md:p-6">
+                    <h3 class="text-lg font-bold mb-4">ทำรายการล่าสุด</h3>
+                    <div class="overflow-x-auto pb-2 md:pb-0">
+                        <table class="w-full text-left border-collapse whitespace-normal md:whitespace-nowrap">
+                            <thead class="bg-slate-50 hidden md:table-header-group">
+                                <tr
+                                    class="border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider font-bold">
+                                    <th class="py-3 px-6 rounded-tl-lg">เวลา</th>
+                                    <th class="py-3 px-6">รายการ</th>
+                                    <th class="py-3 px-6">หนังสือ</th>
+                                    <th class="py-3 px-6 rounded-tr-lg">ผู้ทำรายการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-trans-list"
+                                class="text-sm space-y-3 md:space-y-0 md:divide-y divide-slate-100 bg-transparent md:bg-white">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= VIEW: SCAN ================= -->
+            <section id="view-scan" class="view-section hidden max-w-lg mx-auto w-full animate-fade-in">
+                <div class="text-center mb-6">
+                    <h2 class="text-2xl font-bold text-slate-800">ระบบสแกนอัตโนมัติ</h2>
+                    <p class="text-sm text-slate-500 mt-1">เลือกโหมดแล้วสแกนรหัสหนังสือได้เลย</p>
+                </div>
+
+                <div class="flex bg-slate-200/70 p-1.5 rounded-2xl mb-6 relative shadow-inner">
+                    <div id="mode-slider"
+                        class="absolute w-[calc(50%-4px)] h-[calc(100%-12px)] bg-white rounded-xl shadow-sm top-1.5 left-1.5 transition-all duration-300">
+                    </div>
+                    <button onclick="setScanMode('Borrow')"
+                        class="flex-1 py-3 text-center relative z-10 font-bold text-blue-600" id="btn-mode-borrow"><i
+                            class="fa-solid fa-book-open mr-2"></i> ยืมหนังสือ</button>
+                    <button onclick="setScanMode('Return')"
+                        class="flex-1 py-3 text-center relative z-10 font-bold text-slate-500" id="btn-mode-return"><i
+                            class="fa-solid fa-arrow-rotate-left mr-2"></i> คืนหนังสือ</button>
+                </div>
+
+                <div id="user-input-section"
+                    class="mb-6 bg-white p-5 rounded-2xl shadow-sm border border-slate-100 transition-all">
+
+                    <!-- ส่วนแสดงชื่อหนังสือเมื่อเข้าผ่านโหมด Self-Service -->
+                    <div id="self-book-info"
+                        class="hidden mb-5 p-4 bg-blue-50 border border-blue-200 rounded-xl relative overflow-hidden">
+                        <div class="absolute -right-4 -top-4 text-blue-100 opacity-50"><i
+                                class="fa-solid fa-book text-6xl"></i></div>
+                        <p class="text-[10px] text-blue-600 font-bold uppercase tracking-wider mb-1 relative z-10">
+                            กำลังทำรายการหนังสือ</p>
+                        <p id="self-book-title" class="text-sm font-bold text-slate-800 line-clamp-2 relative z-10">-
+                        </p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label
+                                class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">ชื่อ-นามสกุล
+                                ผู้ยืม <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <i class="fa-solid fa-user absolute left-4 top-3.5 text-slate-400"></i>
+                                <input type="text" id="userName"
+                                    class="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    placeholder="ระบุชื่อผู้ยืม...">
+                            </div>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">เบอร์โทรศัพท์ติดต่อ
+                                <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <i class="fa-solid fa-phone absolute left-4 top-3.5 text-slate-400"></i>
+                                <input type="tel" id="userPhone" oninput="formatPhoneInput(this)"
+                                    class="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                    placeholder="ใส่เบอร์โทร" maxlength="12">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- กฎการยืมสำหรับโหมด Self-Service -->
+                    <div id="self-rules" class="hidden mt-5 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                        <p class="text-xs font-bold text-amber-800 mb-2 flex items-center"><i
+                                class="fa-solid fa-circle-exclamation mr-1.5 text-amber-500"></i> กฎกติกาการยืมหนังสือ
+                        </p>
+                        <ul class="text-[11px] text-amber-700 space-y-1.5 list-disc pl-4 font-medium leading-relaxed">
+                            <li>ยืมได้สูงสุด <b class="text-red-600">3 เล่ม</b> ต่อ 1 เบอร์โทรศัพท์</li>
+                            <li>ระยะเวลายืมไม่เกิน <b class="text-red-600">30 วัน</b></li>
+                            <li>ห้ามขีดเขียน ทำเครื่องหมาย หรือพับหน้าหนังสือ</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 relative">
+                    <div id="camera-header" class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-700 text-sm"><i
+                                class="fa-solid fa-camera mr-2 text-slate-400"></i>กล้องสแกน</h3>
+                        <span id="camera-status"
+                            class="flex items-center text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                            กำลังเตรียมกล้อง...
+                        </span>
+                    </div>
+
+                    <div id="reader" class="mb-5 shadow-inner bg-slate-50"></div>
+
+                    <div class="mt-5 flex space-x-2">
+                        <div class="relative flex-1">
+                            <i class="fa-solid fa-barcode absolute left-4 top-3.5 text-slate-400"></i>
+                            <input type="text" id="bookCode"
+                                class="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none font-mono font-bold text-slate-700"
+                                placeholder="รหัสหนังสือ">
+                        </div>
+                        <!-- เพิ่ม ID เพื่อให้สคริปต์ควบคุมปุ่มได้ -->
+                        <button id="btn-submit-transaction" onclick="submitTransaction()"
+                            class="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-5 py-3 rounded-xl font-bold shadow-md transition-all flex items-center justify-center min-w-[100px]">
+                            <i class="fa-solid fa-paper-plane mr-2"></i> ยืนยัน
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================= VIEW: BOOKS ================= -->
+            <section id="view-books" class="view-section hidden animate-fade-in">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-800">ฐานข้อมูลหนังสือ</h2>
+                        <p class="text-sm text-slate-500 mt-1">จัดการข้อมูลและพิมพ์ป้าย Asset Tag</p>
+                    </div>
+                    <div class="flex space-x-2 w-full md:w-auto">
+                        <!-- View Toggler -->
+                        <div class="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+                            <button onclick="toggleBookView('list')" id="btn-view-list"
+                                class="view-toggle-btn active w-9 h-8 flex items-center justify-center rounded-md text-slate-500 transition-all"><i
+                                    class="fas fa-list"></i></button>
+                            <button onclick="toggleBookView('card')" id="btn-view-card"
+                                class="view-toggle-btn w-9 h-8 flex items-center justify-center rounded-md text-slate-500 transition-all"><i
+                                    class="fas fa-th-large"></i></button>
+                        </div>
+                        <div class="flex-1"></div>
+                        <button onclick="openPrintSettingsMultiple()" id="btn-print-multiple"
+                            class="hidden flex-1 md:flex-none bg-cyan-600 text-white px-4 py-2.5 rounded-xl font-medium shadow-md shadow-cyan-600/20 hover:bg-cyan-700 active:scale-95 transition-all text-sm">
+                            <i class="fa-solid fa-print mr-2"></i>พิมพ์ <span id="print-count"
+                                class="bg-white/20 px-1.5 rounded text-xs ml-1"></span> ป้าย
+                        </button>
+                        <button onclick="openModal('bookModal')"
+                            class="flex-1 md:flex-none bg-blue-600 text-white px-4 py-2.5 rounded-xl font-medium shadow-md shadow-blue-600/20 hover:bg-blue-700 active:scale-95 transition-all text-sm">
+                            <i class="fa-solid fa-plus mr-2"></i>เพิ่มเล่มใหม่
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Books Filter Tabs -->
+                <div class="flex overflow-x-auto gap-2 pb-2 mb-4 scrollbar-hide">
+                    <button onclick="setBookFilter('all')" id="filter-all"
+                        class="filter-btn active px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-sm font-bold whitespace-nowrap transition-all">ทั้งหมด
+                        (<span id="count-all">0</span>)</button>
+                    <button onclick="setBookFilter('Available')" id="filter-avail"
+                        class="filter-btn px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-sm font-bold whitespace-nowrap transition-all">พร้อมบริการ
+                        (<span id="count-avail">0</span>)</button>
+                    <button onclick="setBookFilter('Borrowed')" id="filter-borrow"
+                        class="filter-btn px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-sm font-bold whitespace-nowrap transition-all">ถูกยืมแล้ว
+                        (<span id="count-borrow">0</span>)</button>
+                </div>
+
+                <!-- List View Container -->
+                <div id="books-list-view"
+                    class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse whitespace-nowrap">
+                            <thead class="bg-slate-50 border-b border-slate-200">
+                                <tr class="text-slate-500 text-xs uppercase tracking-wider font-bold">
+                                    <th class="py-4 px-5 text-center w-12"><input type="checkbox" id="selectAll"
+                                            onchange="toggleSelectAll('selectAll')"
+                                            class="w-4 h-4 rounded text-blue-600 bg-slate-100 border-slate-300 focus:ring-blue-500 cursor-pointer">
+                                    </th>
+                                    <th class="py-4 px-5 w-16 text-center">รูปภาพ</th>
+                                    <th class="py-4 px-5 sortable-header" onclick="handleSort('books', 'Book_ID')">
+                                        รหัส/ID <i class="fa-solid fa-sort sort-icon" id="sort-books-Book_ID"></i></th>
+                                    <th class="py-4 px-5 sortable-header" onclick="handleSort('books', 'Title')">
+                                        ชื่อหนังสือ <i class="fa-solid fa-sort sort-icon" id="sort-books-Title"></i>
+                                    </th>
+                                    <th class="py-4 px-5 sortable-header" onclick="handleSort('books', 'Category')">
+                                        หมวดหมู่ <i class="fa-solid fa-sort sort-icon" id="sort-books-Category"></i>
+                                    </th>
+                                    <th class="py-4 px-5 sortable-header" onclick="handleSort('books', 'Status')">สถานะ
+                                        <i class="fa-solid fa-sort sort-icon" id="sort-books-Status"></i></th>
+                                    <th class="py-4 px-5 text-center">จัดการ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="books-table-body" class="text-sm divide-y divide-slate-100 bg-white">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Card View Container -->
+                <div id="books-card-view" class="hidden">
+                    <div class="flex items-center justify-between mb-4">
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer">
+                            <input type="checkbox" id="selectAllCards" onchange="toggleSelectAll('selectAllCards')"
+                                class="w-4 h-4 rounded text-blue-600 bg-slate-100 border-slate-300 focus:ring-blue-500">
+                            เลือกทั้งหมด
+                        </label>
+                        <!-- เรียงข้อมูลสำหรับโหมดการ์ด -->
+                        <div class="text-xs font-bold text-slate-500 flex items-center gap-2">
+                            จัดเรียง:
+                            <select
+                                class="bg-slate-50 border border-slate-200 rounded p-1 outline-none focus:ring-1 focus:ring-blue-500"
+                                onchange="handleSort('books', this.value); if(!sortConfig.books.asc) handleSort('books', this.value);">
+                                <option value="Last_Updated">อัปเดตล่าสุด</option>
+                                <option value="Title">ชื่อหนังสือ A-Z</option>
+                                <option value="Book_ID">รหัส ID</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="books-card-container"
+                        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        <!-- Cards will be injected here -->
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- ================= VIEW: HISTORY ================= -->
+            <section id="view-history" class="view-section hidden animate-fade-in">
+                <div class="flex justify-between items-end mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold text-slate-800">ประวัติทำรายการ</h2>
+                        <p class="text-sm text-slate-500 mt-1">สามารถคลิกที่หัวตารางเพื่อเรียงข้อมูลได้</p>
+                    </div>
+                </div>
+                <div
+                    class="bg-transparent md:bg-white md:rounded-2xl md:shadow-sm md:border border-slate-100 md:overflow-hidden">
+                    <div class="overflow-x-auto pb-4 md:pb-0">
+                        <table class="w-full text-left border-collapse whitespace-normal md:whitespace-nowrap">
+                            <thead class="bg-slate-50 border-b border-slate-200 hidden md:table-header-group">
+                                <tr class="text-slate-500 text-xs uppercase tracking-wider font-bold">
+                                    <th class="py-4 px-6 sortable-header" onclick="handleSort('history', 'Date')">
+                                        วัน-เวลา <i class="fa-solid fa-sort sort-icon" id="sort-history-Date"></i></th>
+                                    <th class="py-4 px-6 sortable-header" onclick="handleSort('history', 'Type')">รายการ
+                                        <i class="fa-solid fa-sort sort-icon" id="sort-history-Type"></i></th>
+                                    <th class="py-4 px-6 sortable-header" onclick="handleSort('history', 'Book_ID')">
+                                        รหัสหนังสือ <i class="fa-solid fa-sort sort-icon" id="sort-history-Book_ID"></i>
+                                    </th>
+                                    <th class="py-4 px-6 sortable-header" onclick="handleSort('history', 'Book_Title')">
+                                        ชื่อหนังสือ <i class="fa-solid fa-sort sort-icon"
+                                            id="sort-history-Book_Title"></i></th>
+                                    <th class="py-4 px-6 sortable-header" onclick="handleSort('history', 'User_Name')">
+                                        ผู้ทำรายการ <i class="fa-solid fa-sort sort-icon"
+                                            id="sort-history-User_Name"></i></th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-body"
+                                class="text-sm space-y-4 md:space-y-0 md:divide-y divide-slate-100 bg-transparent md:bg-white">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- ================= MOBILE BOTTOM NAV ================= -->
+    <nav id="mobile-bottom-nav"
+        class="md:hidden fixed bottom-0 w-full bg-white/90 backdrop-blur-md border-t border-slate-200 flex justify-around py-2 pb-safe z-40 transition-all duration-300">
+        <button onclick="switchView('dashboard')" id="mob-nav-dashboard"
+            class="mobile-nav-item active flex flex-col items-center p-2 w-16 transition-colors">
+            <i class="fa-solid fa-chart-pie text-xl mb-1"></i><span class="text-[10px] font-medium">ภาพรวม</span>
+        </button>
+        <button onclick="switchView('scan')" id="mob-nav-scan"
+            class="mobile-nav-item flex flex-col items-center p-2 w-16 transition-colors relative -mt-4">
+            <div
+                class="bg-blue-600 text-white w-12 h-12 rounded-full flex flex-col items-center justify-center shadow-lg shadow-blue-500/30 mb-1 border-4 border-slate-50">
+                <i class="fa-solid fa-expand text-lg"></i>
+            </div>
+            <span class="text-[10px] font-medium">สแกน</span>
+        </button>
+        <button onclick="switchView('books')" id="mob-nav-books"
+            class="mobile-nav-item flex flex-col items-center p-2 w-16 transition-colors">
+            <i class="fa-solid fa-book text-xl mb-1"></i><span class="text-[10px] font-medium">หนังสือ</span>
+        </button>
+        <button onclick="switchView('history')" id="mob-nav-history"
+            class="mobile-nav-item flex flex-col items-center p-2 w-16 transition-colors">
+            <i class="fa-solid fa-clock-rotate-left text-xl mb-1"></i><span
+                class="text-[10px] font-medium">ประวัติ</span>
+        </button>
+    </nav>
+
+    <!-- ================= MODALS ================= -->
+
+    <!-- Print Configuration Modal -->
+    <div id="print-config-modal"
+        class="fixed inset-0 z-[70] flex items-center justify-center p-4 hidden bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300">
+        <div class="card w-full max-w-4xl max-h-[90vh] flex flex-col bg-white rounded-3xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300"
+            id="print-config-modalContent">
+            <div class="flex justify-between items-center p-5 border-b border-slate-100 bg-cyan-50">
+                <h3 class="text-lg font-bold flex items-center gap-2 text-cyan-800"><i
+                        class="fas fa-print text-cyan-600"></i>ตั้งค่าการพิมพ์ป้าย (Asset Tag)</h3>
+                <button onclick="closeModal('print-config-modal')"
+                    class="text-slate-400 hover:text-slate-800 text-3xl leading-none">&times;</button>
+            </div>
+            <div class="flex-grow grid grid-cols-1 md:grid-cols-3 gap-6 p-6 overflow-y-auto bg-slate-50">
+
+                <!-- Left side: Controls -->
+                <div class="md:col-span-1 space-y-4 overflow-y-auto pr-2">
+                    <div id="config-type-selector">
+                        <label
+                            class="text-sm font-bold text-slate-500 uppercase tracking-wider block mb-2">รูปแบบป้าย</label>
+                        <select id="print-type"
+                            class="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-cyan-500 outline-none text-sm font-medium mb-3"
+                            onchange="updatePrintPreview()">
+                            <option value="assetTag">Asset Tag (แบบเต็ม)</option>
+                            <option value="simple">Simple (แบบย่อ)</option>
+                        </select>
+
+                        <label
+                            class="text-sm font-bold text-slate-500 uppercase tracking-wider block mb-2">รูปแบบโค้ด</label>
+                        <div class="flex gap-2">
+                            <label
+                                class="flex-1 p-2 border border-slate-200 bg-white rounded-xl text-center cursor-pointer text-sm font-medium"
+                                title="รองรับเฉพาะเครื่องยิงบาร์โค้ดทั่วไป"><input type="radio" name="config-code-type"
+                                    value="barcode" checked onchange="updatePrintPreview()"
+                                    class="mr-1 accent-cyan-600"> บาร์โค้ด</label>
+                            <label
+                                class="flex-1 p-2 border border-slate-200 bg-white rounded-xl text-center cursor-pointer text-sm font-medium"
+                                title="รองรับการสแกนด้วยมือถือ (LINE)"><input type="radio" name="config-code-type"
+                                    value="qrcode" onchange="updatePrintPreview()" class="mr-1 accent-cyan-600"> QR
+                                Code</label>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label
+                            class="text-sm font-bold text-slate-500 uppercase tracking-wider block mb-2">ขนาดการพิมพ์จริง
+                            (<span id="config-size-value">100%</span>)</label>
+                        <input type="range" id="config-size-slider" min="10" max="200" value="100"
+                            class="w-full accent-cyan-600" oninput="updatePrintPreview()">
+                    </div>
+
+                    <div class="asset-tag-only space-y-3 pt-4 border-t border-slate-200">
+                        <h5 class="font-bold text-sm text-slate-700"><i
+                                class="fa-solid fa-pen-to-square mr-1"></i>แก้ไขข้อความ (อ้างอิงเล่มแรก)</h5>
+                        <div><label class="text-xs text-slate-500 font-medium block mb-1">หัวข้อหลัก
+                                (Header)</label><input type="text" id="config-title"
+                                class="form-input py-1.5 px-3 w-full text-sm rounded-lg border border-slate-200"
+                                oninput="updatePrintPreview()"></div>
+                        <div><label class="text-xs text-slate-500 font-medium block mb-1">บรรทัดที่ 1
+                                (รหัส)</label><input type="text" id="config-line1"
+                                class="form-input py-1.5 px-3 w-full text-sm rounded-lg border border-slate-200 font-mono"
+                                oninput="updatePrintPreview()"></div>
+                        <div><label class="text-xs text-slate-500 font-medium block mb-1">บรรทัดที่ 2
+                                (ชื่อ)</label><input type="text" id="config-line2"
+                                class="form-input py-1.5 px-3 w-full text-sm rounded-lg border border-slate-200"
+                                oninput="updatePrintPreview()"></div>
+                        <div><label class="text-xs text-slate-500 font-medium block mb-1">บรรทัดที่ 3
+                                (หมวดหมู่)</label><input type="text" id="config-line3"
+                                class="form-input py-1.5 px-3 w-full text-sm rounded-lg border border-slate-200"
+                                oninput="updatePrintPreview()"></div>
+                        <div><label class="text-xs text-slate-500 font-medium block mb-1">ข้อความท้าย
+                                (Footer)</label><input type="text" id="config-footer"
+                                class="form-input py-1.5 px-3 w-full text-sm rounded-lg border border-slate-200"
+                                oninput="updatePrintPreview()"></div>
+                    </div>
+                    <div class="asset-tag-only space-y-2 pt-4 border-t border-slate-200">
+                        <h5 class="font-bold text-sm text-slate-700"><i
+                                class="fa-solid fa-layer-group mr-1"></i>องค์ประกอบ</h5>
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer"><input
+                                type="checkbox" id="config-show-logo" checked onchange="updatePrintPreview()"
+                                class="w-4 h-4 accent-cyan-600 rounded"> แสดงโลโก้ ITTHI</label>
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-600 cursor-pointer"><input
+                                type="checkbox" id="config-show-footer" checked onchange="updatePrintPreview()"
+                                class="w-4 h-4 accent-cyan-600 rounded"> แสดงข้อความท้าย</label>
+                    </div>
+                </div>
+
+                <!-- Right side: Preview -->
+                <div class="md:col-span-2 flex flex-col">
+                    <h4 class="font-bold text-slate-500 uppercase tracking-wider text-xs mb-3 text-center">ตัวอย่างป้าย
+                        (Preview)</h4>
+                    <div
+                        class="flex-1 flex items-center justify-center bg-white rounded-2xl p-4 border border-slate-200 shadow-inner overflow-hidden relative min-h-[300px]">
+                        <div id="print-preview-content"
+                            class="transform-gpu transition-transform duration-200 flex items-center justify-center w-full h-full">
+                            <!-- HTML preview tag renders here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="flex-shrink-0 p-5 border-t border-slate-100 flex justify-end gap-3 bg-white">
+                <button onclick="closeModal('print-config-modal')"
+                    class="bg-slate-100 text-slate-600 px-6 py-2.5 rounded-xl font-bold hover:bg-slate-200 active:scale-95 transition-all">ยกเลิก</button>
+                <button onclick="executePrint()"
+                    class="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-cyan-600/30 active:scale-95 transition-all flex items-center gap-2"><i
+                        class="fas fa-print"></i> สั่งพิมพ์เลย</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Book Form Modal -->
+    <div id="bookModal"
+        class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300 max-h-[90vh] flex flex-col"
+            id="bookModalContent">
+            <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+                <h3 class="font-bold text-lg text-slate-800" id="bookModalTitle"><i
+                        class="fa-solid fa-book-medical mr-2 text-blue-600"></i>เพิ่มหนังสือใหม่</h3>
+                <button onclick="closeModal('bookModal')"
+                    class="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"><i
+                        class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="bookForm" onsubmit="handleBookSubmit(event)"
+                class="p-6 space-y-4 bg-slate-50/50 overflow-y-auto grow">
+                <input type="hidden" id="b_rowIndex">
+                <input type="hidden" id="b_image_url">
+
+                <!-- อัปโหลดรูปภาพ -->
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">รูปหน้าปก /
+                        Cover Image</label>
+                    <div class="flex gap-4 items-start">
+                        <div id="b_image_preview_box"
+                            class="hidden relative w-20 h-28 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 shrink-0">
+                            <img id="b_image_preview" src="" class="w-full h-full object-cover">
+                            <button type="button" onclick="clearImageSelect()"
+                                class="absolute top-1 right-1 bg-red-500/80 hover:bg-red-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs backdrop-blur-sm"><i
+                                    class="fa-solid fa-times"></i></button>
+                        </div>
+                        <div class="flex-1 w-full relative">
+                            <input type="file" id="b_image_file" accept="image/*" onchange="previewSelectedImage(event)"
+                                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+                            <div
+                                class="w-full h-20 md:h-28 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center text-slate-400 bg-slate-50 hover:bg-slate-100 transition-colors">
+                                <i class="fa-solid fa-cloud-arrow-up text-xl md:text-2xl mb-1 md:mb-2"></i>
+                                <span class="text-xs font-medium">คลิกเพื่อเลือกรูปภาพ</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">รหัสอ้างอิง /
+                        Book ID <span class="text-red-500">*</span></label>
+                    <div class="relative">
+                        <i class="fa-solid fa-barcode absolute left-4 top-3.5 text-slate-400"></i>
+                        <input type="text" id="b_id" required
+                            class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none font-mono font-bold text-slate-700 shadow-sm"
+                            placeholder="เช่น B001">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">ชื่อหนังสือ /
+                        Title <span class="text-red-500">*</span></label>
+                    <input type="text" id="b_title" required
+                        class="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700 shadow-sm"
+                        placeholder="ระบุชื่อหนังสือ">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">ผู้แต่ง /
+                            Author</label>
+                        <input type="text" id="b_author"
+                            class="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium text-slate-700 shadow-sm"
+                            placeholder="ชื่อผู้แต่ง">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">หมวดหมู่ /
+                            Category</label>
+                        <select id="b_category"
+                            class="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium text-slate-700 shadow-sm appearance-none cursor-pointer">
+                            <option value="ทั่วไป">ทั่วไป</option>
+                            <option value="วิชาการ">วิชาการ</option>
+                            <option value="นิยาย/เรื่องสั้น">นิยาย/เรื่องสั้น</option>
+                            <option value="นิตยสาร/วารสาร">นิตยสาร/วารสาร</option>
+                            <option value="อ้างอิง">อ้างอิง</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="pt-4 flex space-x-3 pb-2">
+                    <button type="button" onclick="closeModal('bookModal')"
+                        class="flex-1 py-3 rounded-xl text-slate-600 font-bold bg-white border border-slate-200 hover:bg-slate-50 active:scale-95 transition-all">ยกเลิก</button>
+                    <button type="submit"
+                        class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> บันทึกข้อมูล
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Loading Progress Bar -->
+    <div id="loader"
+        class="fixed inset-0 bg-slate-900/50 z-[100] flex flex-col items-center justify-center backdrop-blur-sm transition-all duration-300 hidden opacity-0">
+        <div class="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center w-80 max-w-[85vw] transform scale-95 transition-transform duration-300"
+            id="loader-box">
+            <div class="relative w-20 h-20 mb-6">
+                <div class="absolute inset-0 border-4 border-slate-100 rounded-full"></div>
+                <div class="absolute inset-0 border-4 border-blue-500 rounded-full border-t-transparent animate-spin">
+                </div>
+                <div class="absolute inset-0 flex items-center justify-center text-blue-500 text-2xl"><i
+                        class="fa-solid fa-cloud-arrow-up"></i></div>
+            </div>
+            <h3 class="font-bold text-lg text-slate-800 mb-1" id="loader-title">กำลังประมวลผล</h3>
+            <div class="w-full mt-4">
+                <div class="flex justify-between mb-1">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider"
+                        id="loader-text">CONNECTING...</span>
+                    <span class="text-[10px] font-bold text-blue-600" id="loader-percent">0%</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                    <div id="loader-bar" class="bg-blue-500 h-full rounded-full transition-all duration-200"
+                        style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // GLOBAL STATE & HELPERS
+        // ==========================================
+
+        // 🔴 สิ่งสำคัญ: ต้องนำลิงก์ Web App จาก Google Apps Script (ตอนกด Deploy) มาใส่ตรงนี้
+        const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbw22kkdRcfw1Q94rIC2xnPwU4nlTAPdY_3A4l9Z5ncYrPHrGyReGvOxgL3nZqTDi4Wq6A/exec";
+
+        // สร้างลิงก์อัตโนมัติอ้างอิงจาก Netlify เพื่อเอาไปใช้สร้าง QR Code ให้ลิงก์กลับมาที่เว็บนี้
+        const FRONTEND_URL = window.location.origin + window.location.pathname;
+
+        // ฟังก์ชันกลางสำหรับคุยกับ Google Apps Script API ผ่านการ fetch
+        async function callServer(action, payload = {}) {
+            if (WEB_APP_URL.includes('ใส่รหัสของคุณ')) {
+                Swal.fire('ข้อผิดพลาด', 'คุณลืมเปลี่ยน WEB_APP_URL เป็นลิงก์ของคุณเองครับ!', 'error');
+                throw new Error('URL ไม่ถูกต้อง');
+            }
+            payload.action = action;
+            try {
+                const response = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // ต้องเป็น text/plain สำหรับ GAS
+                    body: JSON.stringify(payload)
+                });
+                return await response.json();
+            } catch (error) {
+                console.error("API Error:", error);
+                throw error;
+            }
+        }
+
+        let isSelfMode = false;
+        let urlBookId = null;
+
+        let scanMode = 'Borrow';
+        let html5QrCode = null;
+        let scannerIsRunning = false;
+        let appData = { books: [], transactions: [], dashboard: {} };
+        let loadInterval;
+        let syncTimer;
+        let pendingPrintBooks = [];
+        let currentBookView = 'list';
+        let expandedRows = new Set();
+        let activeCharts = { trend: null };
+        let currentBase64Image = null;
+        let lastDataString = "";
+
+        // State สำหรับการ Sort และ Filter
+        let bookFilterStatus = 'all';
+        let sortConfig = {
+            books: { col: 'Last_Updated', asc: false },
+            history: { col: 'Date', asc: false }
+        };
+
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true,
+            didOpen: (toast) => {
+                toast.addEventListener('mouseenter', Swal.stopTimer)
+                toast.addEventListener('mouseleave', Swal.resumeTimer)
+            }
+        });
+
+        function showToast(icon, title) {
+            Toast.fire({ icon, title });
+        }
+
+        // --- ระบบขยายรูปภาพ ---
+        function zoomImageById(event, bookId) {
+            if (event) event.stopPropagation();
+            const book = appData.books.find(b => String(b.Book_ID) === String(bookId));
+            if (!book || !book.Image_URL) return;
+
+            let lightbox = document.getElementById('custom-lightbox');
+            if (!lightbox) {
+                lightbox = document.createElement('div');
+                lightbox.id = 'custom-lightbox';
+                lightbox.className = 'fixed inset-0 z-[9999] bg-black/90 backdrop-blur-sm flex items-center justify-center opacity-0 transition-opacity duration-300 hidden cursor-zoom-out p-4';
+                lightbox.onclick = function () {
+                    lightbox.classList.replace('opacity-100', 'opacity-0');
+                    setTimeout(() => { lightbox.classList.add('hidden'); }, 300);
+                };
+
+                const img = document.createElement('img');
+                img.id = 'custom-lightbox-img';
+                img.className = 'max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl transform scale-95 transition-transform duration-300';
+
+                lightbox.appendChild(img);
+                document.body.appendChild(lightbox);
+            }
+
+            const imgEl = document.getElementById('custom-lightbox-img');
+            imgEl.src = book.Image_URL;
+
+            lightbox.classList.remove('hidden');
+            void lightbox.offsetWidth; // trigger reflow
+            lightbox.classList.replace('opacity-0', 'opacity-100');
+            imgEl.classList.replace('scale-95', 'scale-100');
+        }
+
+        window.addEventListener('popstate', (e) => {
+            let modalClosed = false;
+
+            const lightbox = document.getElementById('custom-lightbox');
+            if (lightbox && !lightbox.classList.contains('hidden')) {
+                lightbox.click();
+                modalClosed = true;
+            }
+
+            ['bookModal', 'print-config-modal'].forEach(id => {
+                const modal = document.getElementById(id);
+                if (modal && !modal.classList.contains('hidden')) {
+                    closeModalUIOnly(id);
+                    modalClosed = true;
+                }
+            });
+
+            if (Swal.isVisible()) {
+                Swal.close();
+                modalClosed = true;
+            }
+
+            if (modalClosed) return;
+
+            if (!isSelfMode) {
+                if (e.state && e.state.view) {
+                    switchViewUIOnly(e.state.view);
+                } else if (location.hash) {
+                    let hashView = location.hash.replace('#', '');
+                    if (['dashboard', 'scan', 'books', 'history'].includes(hashView)) {
+                        switchViewUIOnly(hashView);
+                    }
+                } else {
+                    switchViewUIOnly('dashboard');
+                }
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const lightbox = document.getElementById('custom-lightbox');
+                if (lightbox && !lightbox.classList.contains('hidden')) lightbox.click();
+
+                if (Swal.isVisible()) Swal.close();
+                ['bookModal', 'print-config-modal'].forEach(id => {
+                    const modal = document.getElementById(id);
+                    if (modal && !modal.classList.contains('hidden')) {
+                        closeModal(id);
+                    }
+                });
+            }
+        });
+
+        function formatPhoneInput(input) {
+            let val = input.value.replace(/\D/g, '');
+            if (val.length > 10) val = val.slice(0, 10);
+            let formatted = val;
+            if (val.length > 3 && val.length <= 6) {
+                formatted = val.slice(0, 3) + '-' + val.slice(3);
+            } else if (val.length > 6) {
+                formatted = val.slice(0, 3) + '-' + val.slice(3, 6) + '-' + val.slice(6);
+            }
+            input.value = formatted;
+        }
+
+        function parseAppDate(dateStr) {
+            if (!dateStr) return new Date(NaN);
+            let d = new Date(dateStr);
+            if (!isNaN(d.getTime())) return d;
+
+            let parts = String(dateStr).split(/[\s/:-]/);
+            if (parts.length >= 3) {
+                let p0 = parseInt(parts[0], 10);
+                let p1 = parseInt(parts[1], 10);
+                let p2 = parseInt(parts[2], 10);
+
+                let day = p0;
+                let month = p1 - 1;
+                let year = p2;
+
+                if (p2 < 100) year = 2000 + p2;
+                if (year > 2500) year -= 543;
+
+                if (p0 > 31) {
+                    year = p0;
+                    if (year > 2500) year -= 543;
+                    month = p1 - 1;
+                    day = p2;
+                }
+
+                let h = parts[3] ? parseInt(parts[3], 10) : 0;
+                let m = parts[4] ? parseInt(parts[4], 10) : 0;
+                let s = parts[5] ? parseInt(parts[5], 10) : 0;
+                return new Date(year, month, day, h, m, s);
+            }
+            return new Date(NaN);
+        }
+
+        function formatValidDateTime(dateStr) {
+            const d = parseAppDate(dateStr);
+            if (isNaN(d.getTime())) return dateStr || '-';
+            return d.toLocaleString('th-TH', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+        }
+
+        function activateSelfServiceMode() {
+            isSelfMode = true;
+
+            const aside = document.getElementById('desktop-sidebar');
+            const mobNav = document.getElementById('mobile-bottom-nav');
+            const mobHeader = document.getElementById('mobile-header');
+
+            if (aside) aside.style.setProperty('display', 'none', 'important');
+            if (mobNav) mobNav.style.setProperty('display', 'none', 'important');
+            if (mobHeader) mobHeader.style.setProperty('display', 'none', 'important');
+
+            const cameraHeader = document.getElementById('camera-header');
+            const readerWrapper = document.getElementById('reader');
+            if (cameraHeader) cameraHeader.style.setProperty('display', 'none', 'important');
+            if (readerWrapper) readerWrapper.style.setProperty('display', 'none', 'important');
+
+            document.getElementById('self-rules').classList.remove('hidden');
+
+            const bookCodeInput = document.getElementById('bookCode');
+            if (bookCodeInput) {
+                bookCodeInput.readOnly = true;
+                bookCodeInput.classList.add('bg-slate-200', 'text-slate-500', 'cursor-not-allowed');
+                bookCodeInput.classList.remove('bg-slate-50', 'focus:bg-white', 'focus:ring-2');
+            }
+
+            const main = document.querySelector('main');
+            if (main) {
+                main.classList.remove('md:pb-0', 'pb-[70px]');
+                main.classList.add('pb-0');
+            }
+
+            const scanTitle = document.querySelector('#view-scan h2');
+            const scanDesc = document.querySelector('#view-scan p');
+            if (scanTitle) scanTitle.innerHTML = '<i class="fa-solid fa-mobile-screen-button text-blue-600 mr-2"></i>ระบบบริการตัวเอง';
+            if (scanDesc) scanDesc.innerText = 'ตรวจสอบรหัสหนังสือและกรอกข้อมูลเพื่อทำรายการ';
+
+            switchViewUIOnly('scan');
+        }
+
+        window.onload = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            isSelfMode = urlParams.get('mode') === 'self' || urlParams.get('m') === 's';
+            urlBookId = urlParams.get('bookId') || urlParams.get('id');
+            initApp();
+        };
+
+        function initApp() {
+            if (isSelfMode) {
+                activateSelfServiceMode();
+
+                if (urlBookId) {
+                    const decodedId = decodeURIComponent(urlBookId);
+                    document.getElementById('bookCode').value = decodedId;
+
+                    // --- เพิ่มระบบ Feedback ทันทีเมื่อเปิดลิงก์ เพื่อไม่ให้ผู้ใช้กดยืนยันก่อนข้อมูลโหลดเสร็จ ---
+                    document.getElementById('self-book-info').classList.remove('hidden');
+                    document.getElementById('self-book-title').innerHTML = '<i class="fa-solid fa-spinner fa-spin text-blue-500 mr-2"></i>กำลังโหลดข้อมูลหนังสือ...';
+
+                    const btnSubmit = document.getElementById('btn-submit-transaction');
+                    if (btnSubmit) {
+                        btnSubmit.disabled = true;
+                        btnSubmit.classList.add('opacity-50', 'cursor-not-allowed');
+                    }
+                }
+                fetchInitialData(true);
+            } else {
+                history.replaceState({ view: 'dashboard' }, "", "#dashboard");
+                if (window.innerWidth < 768) {
+                    toggleBookView('card');
+                } else {
+                    toggleBookView('list');
+                }
+                switchViewUIOnly('dashboard');
+                fetchInitialData(false);
+            }
+
+            syncTimer = setInterval(() => fetchInitialData(true), 5000);
+        }
+
+        function fetchInitialData(silent = false) {
+            if (!silent) showLoading(true, 'กำลังเชื่อมต่อระบบ...', 'LOADING DATA...');
+
+            callServer('getAllData')
+                .then(data => {
+                    const newDataString = JSON.stringify(data);
+                    if (silent && lastDataString === newDataString) return;
+
+                    lastDataString = newDataString;
+                    appData = data;
+
+                    if (isSelfMode) {
+                        if (urlBookId) {
+                            const decodedId = decodeURIComponent(urlBookId);
+                            const book = appData.books.find(b => String(b.Book_ID) === String(decodedId));
+                            const btnSubmit = document.getElementById('btn-submit-transaction');
+
+                            if (book) {
+                                document.getElementById('self-book-info').classList.remove('hidden');
+                                document.getElementById('self-book-title').innerText = book.Title;
+
+                                if (btnSubmit) {
+                                    btnSubmit.disabled = false;
+                                    btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
+                                }
+
+                                // --- ถ้าระบบพบว่าหนังสือถูก "ยืมแล้ว" ให้เด้ง Popup คืนหนังสือทันที ---
+                                if (book.Status === 'ยืมแล้ว') {
+                                    promptReturnBook(book.Book_ID);
+                                } else {
+                                    setScanMode('Borrow');
+                                }
+                            } else {
+                                document.getElementById('self-book-info').classList.remove('hidden');
+                                document.getElementById('self-book-title').innerHTML = '<span class="text-red-500"><i class="fa-solid fa-circle-xmark mr-1"></i> ไม่พบรหัสหนังสือนี้ในระบบ</span>';
+                            }
+                        }
+                    } else {
+                        renderDashboard();
+                        if (expandedRows.size === 0 || currentBookView === 'card') {
+                            renderBooks();
+                        }
+                        renderHistory();
+                    }
+
+                    if (!silent) {
+                        showLoading(false);
+                        if (!isSelfMode) switchViewUIOnly('dashboard');
+                    }
+                })
+                .catch(err => {
+                    showLoading(false);
+                    if (!silent) showToast('error', 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาตรวจเช็ค Web App URL');
+                });
+        }
+
+        function showLoading(show, title = 'กำลังประมวลผล', text = 'PLEASE WAIT...') {
+            const loader = document.getElementById('loader');
+            const box = document.getElementById('loader-box');
+            const bar = document.getElementById('loader-bar');
+            const pct = document.getElementById('loader-percent');
+
+            document.getElementById('loader-title').innerText = title;
+            document.getElementById('loader-text').innerText = text;
+
+            if (show) {
+                loader.classList.remove('hidden');
+                setTimeout(() => {
+                    loader.classList.replace('opacity-0', 'opacity-100');
+                    box.classList.replace('scale-95', 'scale-100');
+                }, 10);
+
+                bar.style.width = '0%'; pct.innerText = '0%';
+                let progress = 0;
+                clearInterval(loadInterval);
+                loadInterval = setInterval(() => {
+                    progress += Math.random() * 15;
+                    if (progress > 90) progress = 90;
+                    bar.style.width = `${progress}%`; pct.innerText = `${Math.floor(progress)}%`;
+                }, 150);
+            } else {
+                bar.style.width = '100%'; pct.innerText = '100%';
+                clearInterval(loadInterval);
+                setTimeout(() => {
+                    loader.classList.replace('opacity-100', 'opacity-0');
+                    box.classList.replace('scale-100', 'scale-95');
+                    setTimeout(() => loader.classList.add('hidden'), 300);
+                }, 300);
+            }
+        }
+
+        function switchView(viewId) {
+            if (isSelfMode) return;
+            switchViewUIOnly(viewId);
+            history.pushState({ view: viewId }, "", "#" + viewId);
+        }
+
+        function switchViewUIOnly(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            const targetView = document.getElementById(`view-${viewId}`);
+            if (targetView) targetView.classList.remove('hidden');
+
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active', 'bg-slate-50', 'font-semibold'));
+            document.querySelectorAll('.mobile-nav-item').forEach(el => el.classList.remove('active'));
+
+            if (document.getElementById(`nav-${viewId}`)) document.getElementById(`nav-${viewId}`).classList.add('active', 'bg-slate-50', 'font-semibold');
+            if (document.getElementById(`mob-nav-${viewId}`)) document.getElementById(`mob-nav-${viewId}`).classList.add('active');
+
+            if (viewId === 'scan') setTimeout(startScanner, 400);
+            else stopScanner();
+        }
+
+        // ==========================================
+        // SORT & FILTER LOGIC
+        // ==========================================
+        function handleSort(table, col) {
+            if (sortConfig[table].col === col) {
+                sortConfig[table].asc = !sortConfig[table].asc;
+            } else {
+                sortConfig[table].col = col;
+                sortConfig[table].asc = true;
+            }
+
+            document.querySelectorAll(`#view-${table} .sortable-header`).forEach(el => el.classList.remove('active'));
+            document.querySelectorAll(`#view-${table} .sort-icon`).forEach(el => {
+                el.className = 'fa-solid fa-sort sort-icon';
+            });
+
+            const activeHeader = document.querySelector(`#sort-${table}-${col}`)?.parentElement;
+            if (activeHeader) {
+                activeHeader.classList.add('active');
+                const icon = document.getElementById(`sort-${table}-${col}`);
+                if (icon) icon.className = `fa-solid fa-sort-${sortConfig[table].asc ? 'up' : 'down'} sort-icon`;
+            }
+
+            if (table === 'books') renderBooks();
+            if (table === 'history') renderHistory();
+        }
+
+        function sortDataArray(dataArray, col, asc) {
+            return [...dataArray].sort((a, b) => {
+                let valA = a[col] || '';
+                let valB = b[col] || '';
+
+                if (col === 'Date' || col === 'Last_Updated') {
+                    valA = parseAppDate(valA).getTime() || 0;
+                    valB = parseAppDate(valB).getTime() || 0;
+                    return asc ? valA - valB : valB - valA;
+                }
+
+                valA = String(valA).toLowerCase();
+                valB = String(valB).toLowerCase();
+                return asc ? valA.localeCompare(valB, 'th') : valB.localeCompare(valA, 'th');
+            });
+        }
+
+        function setBookFilter(status) {
+            bookFilterStatus = status;
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active', 'text-white', 'bg-blue-500', 'border-blue-500'));
+
+            let activeId = 'filter-all';
+            if (status === 'Available') activeId = 'filter-avail';
+            if (status === 'Borrowed') activeId = 'filter-borrow';
+
+            const activeBtn = document.getElementById(activeId);
+            if (activeBtn) {
+                activeBtn.classList.add('active', 'text-white', 'bg-blue-500', 'border-blue-500');
+            }
+            renderBooks();
+        }
+
+        function jumpToBorrowedBooks() {
+            switchView('books');
+            setBookFilter('Borrowed');
+        }
+
+        // ==========================================
+        // RENDER FUNCTIONS
+        // ==========================================
+        function renderAllViews() {
+            if (isSelfMode) return;
+            renderDashboard();
+            renderBooks();
+            renderHistory();
+        }
+
+        function renderDashboard() {
+            const d = appData.dashboard;
+            if (!d) return;
+
+            document.getElementById('stat-total').innerText = d.totalBooks || 0;
+            document.getElementById('stat-avail').innerText = d.availableBooks || 0;
+            document.getElementById('stat-borrowed').innerText = d.borrowedBooks || 0;
+
+            const uniqueUsers = new Set(appData.transactions.map(t => t.userName).filter(n => n && n !== 'คืนเข้าห้องสมุด' && n !== 'System (คืน)')).size;
+            document.getElementById('stat-users').innerText = uniqueUsers;
+
+            // ---------------- ตารางรายการค้างส่ง (เกิน 30 วัน) ----------------
+            const overdueList = document.getElementById('overdue-list');
+            if (d.overdueBooks && d.overdueBooks.length > 0) {
+                overdueList.innerHTML = d.overdueBooks.map(b => {
+                    return `
+              <tr class="hover:bg-red-100 transition-colors group flex flex-col md:table-row border border-red-200 md:border-0 md:border-b border-b-red-100 p-4 md:p-0 bg-red-50 md:bg-transparent rounded-xl md:rounded-none">
+                  <td class="py-1 md:py-3 px-0 md:px-6 flex items-center justify-between md:table-cell">
+                      <span class="text-[10px] font-bold text-red-500 uppercase md:hidden">จำนวนวัน</span>
+                      <span class="bg-red-100 md:bg-red-100 text-red-600 font-bold px-2 py-1 rounded-lg text-xs shadow-sm md:shadow-none border border-red-200 md:border-none">${b.days} วัน</span>
+                  </td>
+                  <td class="py-1 md:py-3 px-0 md:px-6 flex items-center justify-between md:table-cell border-t border-dashed border-red-200 md:border-none mt-2 pt-2 md:mt-0 md:pt-0">
+                      <span class="text-[10px] font-bold text-red-500 uppercase md:hidden">รหัสหนังสือ</span>
+                      <span class="font-mono text-xs text-slate-600 font-bold bg-white md:bg-transparent px-2 md:px-0 py-0.5 md:py-0 rounded shadow-sm md:shadow-none">${b.bookId}</span>
+                  </td>
+                  <td class="py-1 md:py-3 px-0 md:px-6 flex flex-col items-start md:table-cell cursor-pointer border-t border-dashed border-red-200 md:border-none mt-2 pt-2 md:mt-0 md:pt-0" onclick="goToBook('${b.bookId}')" title="ดูข้อมูลหนังสือ">
+                      <span class="text-[10px] font-bold text-red-500 uppercase md:hidden mb-1">ชื่อหนังสือ</span>
+                      <div class="font-bold text-slate-800 group-hover:text-red-600 transition-colors flex items-start"><i class="fa-solid fa-book-open mr-2 mt-0.5 text-red-500 md:text-red-400"></i><span class="hover:underline whitespace-normal line-clamp-2 md:line-clamp-none text-left">${b.title}</span></div>
+                  </td>
+                  <td class="py-1 md:py-3 px-0 md:px-6 flex items-center justify-between md:table-cell border-t border-dashed border-red-200 md:border-none mt-2 pt-2 md:mt-0 md:pt-0">
+                      <span class="text-[10px] font-bold text-red-500 uppercase md:hidden">ผู้ยืม</span>
+                      <div class="text-right md:text-left">
+                          <div class="font-bold text-slate-800 text-xs flex justify-end md:justify-start items-center"><i class="fa-solid fa-user mr-1.5 text-red-400 md:text-slate-400"></i>${b.borrower}</div>
+                          <div class="text-[10px] text-slate-600 md:text-slate-500 font-mono mt-0.5"><i class="fa-solid fa-phone mr-1 opacity-50"></i>${b.phone}</div>
+                      </div>
+                  </td>
+              </tr>
+              `;
+                }).join('');
+            } else {
+                overdueList.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-slate-400 font-medium"><i class="fa-solid fa-check-circle text-2xl mb-2 block text-emerald-400"></i>ไม่มีรายการหนังสือค้างส่งเกิน 30 วัน</td></tr>`;
+            }
+
+            // ---------------- วิเคราะห์นักอ่านยอดฮิต (Top Readers) ----------------
+            const userBorrowCounts = {};
+            appData.transactions.forEach(t => {
+                if (t.Type === 'Borrow' && t.User_Name && t.User_Name !== 'System (คืน)' && t.User_Name !== 'คืนเข้าห้องสมุด') {
+                    userBorrowCounts[t.User_Name] = (userBorrowCounts[t.User_Name] || 0) + 1;
+                }
+            });
+
+            const topReaders = Object.entries(userBorrowCounts)
+                .map(([name, count]) => ({ name, count }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 5);
+
+            const topReadersList = document.getElementById('top-readers-list');
+            if (topReaders.length > 0) {
+                topReadersList.innerHTML = topReaders.map((u, i) => {
+                    const medals = ['text-yellow-400', 'text-slate-300', 'text-amber-600'];
+                    const medalColor = i < 3 ? medals[i] : 'text-slate-200';
+                    return `
+              <li class="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100 hover:bg-blue-50 transition-colors">
+                  <div class="flex items-center">
+                      <div class="w-6 font-bold ${medalColor}">${i + 1}.</div>
+                      <div class="font-bold text-slate-700 text-sm ml-2">${u.name}</div>
+                  </div>
+                  <div class="bg-blue-100 text-blue-600 text-xs font-bold px-2 py-1 rounded">ยืม ${u.count} เล่ม</div>
+              </li>`;
+                }).join('');
+            } else {
+                topReadersList.innerHTML = `<div class="text-center py-8 text-slate-400 font-medium"><i class="fa-solid fa-ranking-star text-2xl mb-2 block opacity-50"></i>ยังไม่มีข้อมูลการยืมเพียงพอ</div>`;
+            }
+
+            // ---------------- ทำรายการล่าสุด ----------------
+            const list = document.getElementById('recent-trans-list');
+            if (d.recentTrans && d.recentTrans.length > 0) {
+                list.innerHTML = d.recentTrans.map(t => {
+                    const isBorrow = t.type === 'Borrow';
+                    const iconHtml = isBorrow ? `<i class="fa-solid fa-arrow-up-right-from-square text-amber-500 w-4"></i>` : `<i class="fa-solid fa-arrow-right-to-bracket text-emerald-500 w-4"></i>`;
+                    return `
+          <tr class="hover:bg-slate-100 transition-colors group flex flex-col md:table-row border border-slate-200 md:border-0 md:border-b border-b-slate-100 p-4 md:p-0 bg-slate-50 md:bg-transparent rounded-xl md:rounded-none">
+            <td class="py-1 md:py-3 px-0 md:px-6 flex items-center justify-between md:table-cell">
+              <span class="text-[10px] font-bold text-slate-400 uppercase md:hidden">เวลา</span>
+              <span class="text-xs text-slate-500 font-medium">${formatValidDateTime(t.date)}</span>
+            </td>
+            <td class="py-1 md:py-3 px-0 md:px-6 flex items-center justify-between md:table-cell border-t border-dashed border-slate-200 md:border-none mt-2 pt-2 md:mt-0 md:pt-0">
+              <span class="text-[10px] font-bold text-slate-400 uppercase md:hidden">รายการ</span>
+              <div>${getBadgeHtml(t.type)}</div>
+            </td>
+            <td class="py-1 md:py-3 px-0 md:px-6 flex flex-col items-start md:table-cell cursor-pointer border-t border-dashed border-slate-200 md:border-none mt-2 pt-2 md:mt-0 md:pt-0" onclick="goToBook('${t.bookId}')" title="คลิกเพื่อดูข้อมูลหนังสือเล่มนี้">
+              <span class="text-[10px] font-bold text-slate-400 uppercase md:hidden mb-1">หนังสือ</span>
+              <div class="font-bold text-slate-700 group-hover:text-blue-600 transition-colors flex items-start gap-2"><div class="pt-0.5">${iconHtml}</div> <span class="whitespace-normal line-clamp-2 md:line-clamp-none max-w-full md:max-w-[200px] inline-block hover:underline underline-offset-4 text-left">${t.bookTitle}</span></div>
+            </td>
+            <td class="py-1 md:py-3 px-0 md:px-6 flex items-center justify-between md:table-cell border-t border-dashed border-slate-200 md:border-none mt-2 pt-2 md:mt-0 md:pt-0">
+              <span class="text-[10px] font-bold text-slate-400 uppercase md:hidden">ผู้ทำรายการ</span>
+              <div class="font-bold text-slate-700 flex items-center"><div class="w-6 h-6 rounded-full bg-white md:bg-slate-100 flex items-center justify-center text-slate-400 mr-2 text-[10px] shadow-sm md:shadow-none"><i class="fa-solid fa-user"></i></div> <span class="truncate max-w-[100px]">${t.userName}</span></div>
+            </td>
+          </tr>`}).join('');
+            } else {
+                list.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-slate-400 font-medium"><i class="fa-solid fa-inbox text-2xl mb-2 block opacity-50"></i>ยังไม่มีประวัติการทำรายการในขณะนี้</td></tr>`;
+            }
+
+            // ---------------- สถิติ 7 วัน ----------------
+            const trendData = {};
+            const todayDate = new Date();
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(todayDate);
+                d.setDate(d.getDate() - i);
+                const dStr = d.getFullYear() + '-' + ("0" + (d.getMonth() + 1)).slice(-2) + '-' + ("0" + d.getDate()).slice(-2);
+                const displayStr = d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+                trendData[dStr] = { display: displayStr, borrow: 0, return: 0 };
+            }
+
+            appData.transactions.forEach(t => {
+                if (!t.Date) return;
+                const transDate = parseAppDate(t.Date);
+                if (isNaN(transDate.getTime())) return;
+                const dStr = transDate.getFullYear() + '-' + ("0" + (transDate.getMonth() + 1)).slice(-2) + '-' + ("0" + transDate.getDate()).slice(-2);
+
+                if (trendData[dStr] !== undefined) {
+                    if (t.Type === 'Borrow') trendData[dStr].borrow++;
+                    else if (t.Type === 'Return') trendData[dStr].return++;
+                }
+            });
+
+            if (activeCharts.trend) activeCharts.trend.destroy();
+            const ctxTrend = document.getElementById('trendChart').getContext('2d');
+            activeCharts.trend = new Chart(ctxTrend, {
+                type: 'bar',
+                data: {
+                    labels: Object.values(trendData).map(d => d.display),
+                    datasets: [
+                        { label: 'ยืม', data: Object.values(trendData).map(d => d.borrow), backgroundColor: '#f59e0b', borderRadius: 4 },
+                        { label: 'คืน', data: Object.values(trendData).map(d => d.return), backgroundColor: '#10b981', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    animation: false,
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top', labels: { font: { family: 'Prompt', size: 11 }, usePointStyle: true } } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { font: { family: 'Prompt', size: 10 } } },
+                        y: { grid: { color: '#f1f5f9' }, border: { dash: [4, 4] }, ticks: { stepSize: 1, font: { family: 'Prompt', size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        function toggleRowDetails(bookId, rowIndex) {
+            if (expandedRows.has(bookId)) {
+                expandedRows.delete(bookId);
+            } else {
+                expandedRows.add(bookId);
+            }
+
+            const detailRow = document.getElementById('detail-' + rowIndex);
+            const icon = document.getElementById('icon-detail-' + rowIndex);
+            if (detailRow && icon) {
+                if (expandedRows.has(bookId)) {
+                    detailRow.classList.remove('hidden');
+                    icon.classList.add('rotate-90');
+                } else {
+                    detailRow.classList.add('hidden');
+                    icon.classList.remove('rotate-90');
+                }
+            }
+        }
+
+        function showBookDetailsCard(bookId) {
+            const b = appData.books.find(x => String(x.Book_ID) === String(bookId));
+            if (!b) return;
+
+            const bookTrans = appData.transactions.filter(t => String(t.Book_ID) === String(b.Book_ID)).slice(0, 5);
+            let timelineHtml = '<div class="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">ยังไม่มีประวัติทำรายการ</div>';
+
+            if (bookTrans.length > 0) {
+                timelineHtml = '<div class="text-left relative border-l-2 border-slate-200 ml-2 space-y-4 py-2">';
+                bookTrans.forEach((t, i) => {
+                    const isB = t.Type === 'Borrow';
+                    const color = isB ? 'amber' : 'emerald';
+                    const icon = isB ? 'fa-arrow-up-right-from-square' : 'fa-arrow-right-to-bracket';
+                    const dateStr = formatValidDateTime(t.Date);
+
+                    timelineHtml += `
+                <div class="relative pl-5 ${i === 0 ? 'opacity-100' : 'opacity-70'}">
+                    <div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-${color}-500 border-4 border-white shadow-sm"></div>
+                    <div class="text-[10px] font-bold text-slate-400 leading-none mb-1">${dateStr}</div>
+                    <div class="text-xs font-bold text-slate-700 leading-tight"><i class="fa-solid ${icon} text-${color}-500 mr-1 w-3"></i> ${isB ? 'ยืม' : 'คืน'} โดย <span class="text-blue-600">${t.User_Name}</span></div>
+                </div>`;
+                });
+                timelineHtml += '</div>';
+            }
+
+            const imgHtml = b.Image_URL
+                ? `<img src="${b.Image_URL}" class="w-24 h-32 object-cover rounded-lg shadow-sm border border-slate-200 cursor-zoom-in hover:opacity-80 transition-opacity" alt="Cover" onclick="zoomImageById(event, '${String(b.Book_ID).replace(/'/g, "\\'")}')" onerror="this.onerror=null; this.src='https://placehold.co/100x120?text=No+Image';">`
+                : `<div class="w-24 h-32 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center text-slate-300"><i class="fa-solid fa-image text-3xl"></i></div>`;
+
+            Swal.fire({
+                html: `
+            <div class="text-left">
+                <h4 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center"><i class="fa-solid fa-circle-info mr-2 text-blue-500 text-lg"></i>รายละเอียดหนังสือ</h4>
+                <div class="flex gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <div class="shrink-0">${imgHtml}</div>
+                    <div class="flex-1 grid grid-cols-1 gap-2 text-sm content-start">
+                        <div>
+                            <div class="text-[10px] text-slate-400 font-bold uppercase mb-0.5">รหัสอ้างอิง</div>
+                            <div class="font-mono font-bold text-blue-600 bg-blue-50 inline-block px-2 py-0.5 rounded">${b.Book_ID}</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] text-slate-400 font-bold uppercase mb-0.5">ชื่อหนังสือ</div>
+                            <div class="font-bold text-slate-700 leading-tight">${b.Title}</div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 mt-1">
+                            <div>
+                                <div class="text-[10px] text-slate-400 font-bold uppercase mb-0.5">ผู้แต่ง</div>
+                                <div class="font-medium text-slate-700 text-xs truncate" title="${b.Author || '-'}">${b.Author || '-'}</div>
+                            </div>
+                            <div>
+                                <div class="text-[10px] text-slate-400 font-bold uppercase mb-0.5">หมวดหมู่</div>
+                                <div class="font-medium text-slate-700 text-xs">${b.Category || '-'}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <h4 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center"><i class="fa-solid fa-clock-rotate-left mr-2 text-blue-500 text-lg"></i>ประวัติทำรายการล่าสุด</h4>
+                <div class="bg-white p-3 border border-slate-100 rounded-xl shadow-sm">
+                    ${timelineHtml}
+                </div>
+            </div>
+            `,
+                showCloseButton: true,
+                showConfirmButton: false,
+                customClass: { popup: 'rounded-3xl w-[90%] md:w-[500px]' }
+            });
+
+            history.pushState({ modal: 'sweetalert' }, "", "#details");
+        }
+
+        function renderBooks() {
+            const selectedIds = Array.from(document.querySelectorAll('.book-cb:checked')).map(cb => String(cb.value));
+
+            // 1. Filter Data
+            let filteredBooks = appData.books;
+            let countAll = appData.books.length;
+            let countAvail = 0;
+            let countBorrow = 0;
+
+            appData.books.forEach(b => {
+                if (b.Status === 'พร้อมบริการ') countAvail++;
+                if (b.Status === 'ยืมแล้ว') countBorrow++;
+            });
+
+            document.getElementById('count-all').innerText = countAll;
+            document.getElementById('count-avail').innerText = countAvail;
+            document.getElementById('count-borrow').innerText = countBorrow;
+
+            if (bookFilterStatus === 'Available') filteredBooks = filteredBooks.filter(b => b.Status === 'พร้อมบริการ');
+            if (bookFilterStatus === 'Borrowed') filteredBooks = filteredBooks.filter(b => b.Status === 'ยืมแล้ว');
+
+            // 2. Sort Data
+            filteredBooks = sortDataArray(filteredBooks, sortConfig.books.col, sortConfig.books.asc);
+
+            const tbody = document.getElementById('books-table-body');
+            const cardContainer = document.getElementById('books-card-container');
+
+            let listHtml = '';
+            let cardHtml = '';
+
+            if (filteredBooks.length === 0) {
+                const emptyHtml = `<tr><td colspan="7" class="text-center py-8 text-slate-400 font-medium"><i class="fa-solid fa-book-open text-2xl mb-2 block opacity-50"></i>ไม่พบข้อมูลหนังสือตามเงื่อนไข</td></tr>`;
+                tbody.innerHTML = emptyHtml;
+                cardContainer.innerHTML = `<div class="col-span-full text-center py-8 text-slate-400 font-medium"><i class="fa-solid fa-book-open text-2xl mb-2 block opacity-50"></i>ไม่พบข้อมูลหนังสือตามเงื่อนไข</div>`;
+                return;
+            }
+
+            filteredBooks.forEach(b => {
+                const safeId = String(b.Book_ID).replace(/"/g, '&quot;');
+                const safeTitle = String(b.Title).replace(/"/g, '&quot;').replace(/'/g, "\\'");
+                const safeCategory = String(b.Category || '-').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+                const lastUpdatedText = formatValidDateTime(b.Last_Updated);
+
+                const bookTrans = appData.transactions.filter(t => String(t.Book_ID) === String(b.Book_ID)).slice(0, 5);
+                let timelineHtml = '<div class="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">ยังไม่มีประวัติทำรายการ</div>';
+
+                if (bookTrans.length > 0) {
+                    timelineHtml = '<div class="relative border-l-2 border-slate-200 ml-2 space-y-4 py-2">';
+                    bookTrans.forEach((t, i) => {
+                        const isB = t.Type === 'Borrow';
+                        const color = isB ? 'amber' : 'emerald';
+                        const icon = isB ? 'fa-arrow-up-right-from-square' : 'fa-arrow-right-to-bracket';
+                        const dateStr = formatValidDateTime(t.Date);
+
+                        timelineHtml += `
+                <div class="relative pl-5 ${i === 0 ? 'opacity-100' : 'opacity-70'}">
+                    <div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-${color}-500 border-4 border-white shadow-sm"></div>
+                    <div class="text-[10px] font-bold text-slate-400 leading-none mb-1">${dateStr}</div>
+                    <div class="text-xs font-bold text-slate-700 leading-tight"><i class="fa-solid ${icon} text-${color}-500 mr-1 w-3"></i> ${isB ? 'ยืม' : 'คืน'} โดย <span class="text-blue-600">${t.User_Name}</span></div>
+                </div>`;
+                    });
+                    timelineHtml += '</div>';
+                }
+
+                const isExpanded = expandedRows.has(String(b.Book_ID));
+                const rowHiddenClass = isExpanded ? '' : 'hidden';
+                const iconRotateClass = isExpanded ? 'rotate-90' : '';
+
+                // อัปเดตรูปภาพให้คลิกเพื่อขยายได้
+                const imgListHtml = b.Image_URL
+                    ? `<img src="${b.Image_URL}" class="w-10 h-12 object-cover rounded shadow-sm border border-slate-200 mx-auto cursor-zoom-in hover:opacity-80 transition-opacity" onclick="zoomImageById(event, '${safeId.replace(/'/g, "\\'")}')" onerror="this.onerror=null; this.src='https://placehold.co/100x120?text=No+Image';">`
+                    : `<div class="w-10 h-12 bg-slate-100 rounded border border-slate-200 flex items-center justify-center text-slate-300 mx-auto text-xs"><i class="fa-solid fa-image"></i></div>`;
+
+                const imgCardHtml = b.Image_URL
+                    ? `<div class="relative group/img">
+                 <img src="${b.Image_URL}" class="w-full h-40 object-cover rounded-t-xl cursor-zoom-in" onclick="zoomImageById(event, '${safeId.replace(/'/g, "\\'")}')" onerror="this.onerror=null; this.src='https://placehold.co/400x300?text=No+Image';">
+                 <div class="absolute top-2 left-2 bg-black/40 text-white w-7 h-7 rounded-full flex items-center justify-center pointer-events-none opacity-0 group-hover/img:opacity-100 transition-opacity z-10 text-xs">
+                    <i class="fa-solid fa-magnifying-glass-plus"></i>
+                 </div>
+               </div>`
+                    : `<div class="w-full h-40 bg-slate-100 rounded-t-xl flex flex-col items-center justify-center text-slate-300"><i class="fa-solid fa-image text-4xl mb-2"></i><span class="text-xs font-medium">ไม่มีรูปภาพ</span></div>`;
+
+                listHtml += `
+          <tr class="hover:bg-slate-50 transition-colors border-b border-slate-50 cursor-pointer group" onclick="toggleRowDetails('${safeId}', ${b._rowIndex})" title="คลิกเพื่อดูรายละเอียด">
+            <td class="py-3.5 px-5 text-center" onclick="event.stopPropagation();">
+              <input type="checkbox" class="book-cb w-4 h-4 rounded text-blue-600 bg-slate-100 border-slate-300 focus:ring-blue-500 cursor-pointer transition-all" value="${safeId}" onchange="updatePrintButtonState()">
+            </td>
+            <td class="py-3.5 px-2 text-center">${imgListHtml}</td>
+            <td class="py-3.5 px-5">
+              <div class="flex items-center">
+                  <i id="icon-detail-${b._rowIndex}" class="fa-solid fa-chevron-right text-slate-400 text-xs mr-3 transition-transform duration-200 ${iconRotateClass} group-hover:text-blue-500"></i>
+                  <span class="font-mono text-xs text-blue-600 font-bold bg-blue-50/50 px-2 py-1 rounded-lg border border-blue-100">${b.Book_ID}</span>
+              </div>
+            </td>
+            <td class="py-3.5 px-5">
+              <div class="font-bold text-slate-800">${b.Title}</div>
+              <div class="text-[10px] text-slate-400 font-medium mt-0.5"><i class="fa-solid fa-pen-nib mr-1 opacity-70"></i>${b.Author || '-'}</div>
+            </td>
+            <td class="py-3.5 px-5">
+              <span class="bg-slate-100 text-slate-600 text-[10px] px-2 py-1 rounded font-bold uppercase tracking-wider">${b.Category}</span>
+            </td>
+            <td class="py-3.5 px-5">${getBadgeHtml(b.Status)}</td>
+            <td class="py-3.5 px-5 text-center space-x-1" onclick="event.stopPropagation();">
+              <button onclick='openPrintSettingsSingle("${safeId.replace(/'/g, "\\'")}", "${safeTitle}", "${safeCategory}")' class="text-cyan-600 hover:text-white hover:bg-cyan-600 w-8 h-8 rounded-full bg-cyan-50 transition-colors" title="พิมพ์ป้ายแท็ก"><i class="fa-solid fa-print"></i></button>
+              <button onclick='editBook(${JSON.stringify(b).replace(/'/g, "\\'")})' class="text-blue-500 hover:text-white hover:bg-blue-600 w-8 h-8 rounded-full bg-blue-50 transition-colors" title="แก้ไขข้อมูล"><i class="fa-solid fa-pen"></i></button>
+              <button onclick='deleteRecord("Books", ${b._rowIndex})' class="text-red-500 hover:text-white hover:bg-red-600 w-8 h-8 rounded-full bg-red-50 transition-colors" title="ลบออกจากระบบ"><i class="fa-solid fa-trash"></i></button>
+            </td>
+          </tr>
+          
+          <tr id="detail-${b._rowIndex}" class="${rowHiddenClass} bg-slate-50 border-b border-slate-200/60 transition-all duration-300">
+            <td colspan="7" class="p-0">
+               <div class="px-6 py-4 flex flex-col md:flex-row gap-4">
+                  
+                  <div class="flex-1 bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex gap-4 relative overflow-hidden">
+                     <div class="flex-1">
+                         <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center"><i class="fa-solid fa-circle-info mr-2 text-blue-500 text-base"></i>รายละเอียดและสถานะ</h4>
+                         <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+                            <div>
+                               <div class="text-[10px] text-slate-400 font-bold uppercase mb-1">รหัสอ้างอิง</div>
+                               <div class="font-mono font-bold text-blue-600 bg-blue-50 inline-block px-2 py-0.5 rounded">${b.Book_ID}</div>
+                            </div>
+                            <div class="col-span-2">
+                               <div class="text-[10px] text-slate-400 font-bold uppercase mb-1">ชื่อหนังสือ</div>
+                               <div class="font-bold text-slate-700">${b.Title}</div>
+                            </div>
+                            <div>
+                               <div class="text-[10px] text-slate-400 font-bold uppercase mb-1">ผู้แต่ง</div>
+                               <div class="font-medium text-slate-700">${b.Author || '-'}</div>
+                            </div>
+                            <div>
+                               <div class="text-[10px] text-slate-400 font-bold uppercase mb-1">หมวดหมู่</div>
+                               <div class="font-medium text-slate-700">${b.Category || '-'}</div>
+                            </div>
+                            <div>
+                               <div class="text-[10px] text-slate-400 font-bold uppercase mb-1">อัปเดตสถานะล่าสุด</div>
+                               <div class="font-mono text-xs font-medium text-slate-600">${lastUpdatedText}</div>
+                            </div>
+                         </div>
+                     </div>
+                     <div class="w-28 flex-shrink-0 hidden sm:flex flex-col items-center justify-center border-l border-slate-100 pl-4">
+                         <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(b.Book_ID)}&margin=4&ecc=L" alt="QR Code" class="w-full rounded-lg shadow-sm border border-slate-200">
+                         <span class="text-[10px] font-mono text-slate-400 mt-2 font-bold tracking-widest">${b.Book_ID}</span>
+                     </div>
+                  </div>
+                  
+                  <div class="w-full md:w-64 bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col">
+                      <h4 class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center"><i class="fa-solid fa-clock-rotate-left mr-2 text-blue-500 text-base"></i>ประวัติทำรายการล่าสุด</h4>
+                      <div class="flex-1 overflow-hidden">
+                          ${timelineHtml}
+                      </div>
+                  </div>
+
+               </div>
+            </td>
+          </tr>
+        `;
+
+                cardHtml += `
+          <div class="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col relative group hover:shadow-md transition-shadow">
+              <div class="absolute top-3 left-3 z-10" onclick="event.stopPropagation()">
+                  <input type="checkbox" class="book-cb w-5 h-5 rounded text-blue-600 bg-white/80 backdrop-blur border-slate-300 focus:ring-blue-500 cursor-pointer shadow-sm" value="${safeId}" onchange="updatePrintButtonState()">
+              </div>
+              <div class="absolute top-3 right-3 flex space-x-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity" onclick="event.stopPropagation()">
+                  <button onclick='editBook(${JSON.stringify(b).replace(/'/g, "\\'")})' class="text-blue-600 hover:text-white hover:bg-blue-600 w-8 h-8 text-sm rounded-full bg-white/90 backdrop-blur transition-colors shadow-md" title="แก้ไขข้อมูล"><i class="fa-solid fa-pen"></i></button>
+                  <button onclick='deleteRecord("Books", ${b._rowIndex})' class="text-red-500 hover:text-white hover:bg-red-600 w-8 h-8 text-sm rounded-full bg-white/90 backdrop-blur transition-colors shadow-md" title="ลบออกจากระบบ"><i class="fa-solid fa-trash"></i></button>
+              </div>
+
+              <!-- Cover Image Area -->
+              <div class="w-full relative cursor-pointer" onclick="showBookDetailsCard('${safeId.replace(/'/g, "\\'")}')">
+                 ${imgCardHtml}
+                 <div class="absolute bottom-2 right-2 bg-white/90 backdrop-blur px-2 py-0.5 rounded-lg border border-white/50 shadow-sm flex items-center">
+                    <i class="fa-solid fa-qrcode text-[10px] text-slate-500 mr-1"></i>
+                    <span class="font-mono text-[10px] text-slate-700 font-bold">${b.Book_ID}</span>
+                 </div>
+              </div>
+
+              <!-- Content Area -->
+              <div class="p-4 flex flex-col grow cursor-pointer" onclick="showBookDetailsCard('${safeId.replace(/'/g, "\\'")}')">
+                  <div class="font-bold text-slate-800 text-sm leading-tight line-clamp-2 mb-1" title="${b.Title}">${b.Title}</div>
+                  <div class="text-xs text-slate-400 font-medium truncate mb-3"><i class="fa-solid fa-pen-nib mr-1 opacity-70"></i>${b.Author || '-'}</div>
+
+                  <div class="flex justify-between items-end mt-auto pt-3 border-t border-slate-50">
+                      <div class="max-w-[60%]">
+                          <div class="mb-1">${getBadgeHtml(b.Status)}</div>
+                          <div class="text-[9px] font-mono text-slate-400 mt-1 truncate"><i class="fa-regular fa-clock mr-1"></i>${lastUpdatedText}</div>
+                      </div>
+                      <button onclick='event.stopPropagation(); openPrintSettingsSingle("${safeId.replace(/'/g, "\\'")}", "${safeTitle}", "${safeCategory}")' class="text-cyan-600 bg-cyan-50 hover:bg-cyan-600 hover:text-white font-bold text-[10px] py-1.5 px-2.5 rounded-lg transition-colors flex items-center gap-1.5 shrink-0" title="พิมพ์ป้ายแท็ก">
+                          <i class="fa-solid fa-print"></i> พิมพ์
+                      </button>
+                  </div>
+              </div>
+          </div>`;
+            });
+
+            tbody.innerHTML = listHtml;
+            cardContainer.innerHTML = cardHtml;
+
+            setTimeout(() => {
+                selectedIds.forEach(id => {
+                    const safeIdForSelector = id.replace(/"/g, '\\"');
+                    document.querySelectorAll(`.book-cb[value="${safeIdForSelector}"]`).forEach(cb => {
+                        if (cb) cb.checked = true;
+                    });
+                });
+                updatePrintButtonState();
+            }, 10);
+        }
+
+        function toggleBookView(view) {
+            currentBookView = view;
+            const listView = document.getElementById('books-list-view');
+            const cardView = document.getElementById('books-card-view');
+            const btnList = document.getElementById('btn-view-list');
+            const btnCard = document.getElementById('btn-view-card');
+
+            if (view === 'list') {
+                listView.classList.remove('hidden');
+                cardView.classList.add('hidden');
+                btnList.classList.add('active');
+                btnCard.classList.remove('active');
+            } else {
+                listView.classList.add('hidden');
+                cardView.classList.remove('hidden');
+                btnList.classList.remove('active');
+                btnCard.classList.add('active');
+            }
+        }
+
+        function renderHistory() {
+            const sortedHistory = sortDataArray(appData.transactions, sortConfig.history.col, sortConfig.history.asc);
+            const tbody = document.getElementById('history-table-body');
+
+            tbody.innerHTML = sortedHistory.map(t => {
+                const isBorrow = t.Type === 'Borrow';
+                const iconHtml = isBorrow ? `<i class="fa-solid fa-arrow-up-right-from-square text-amber-500 mr-1"></i>` : `<i class="fa-solid fa-arrow-right-to-bracket text-emerald-500 mr-1"></i>`;
+                return `
+        <tr class="hover:bg-slate-50 transition-colors group flex flex-col md:table-row border border-slate-200 md:border-0 md:border-b border-b-slate-100 p-4 md:p-0 bg-white md:bg-transparent rounded-2xl md:rounded-none shadow-sm md:shadow-none">
+          <td class="py-1 md:py-3 px-0 md:px-6 flex items-center justify-between md:table-cell">
+            <span class="text-[10px] font-bold text-slate-400 uppercase md:hidden">วัน-เวลา</span>
+            <span class="text-xs text-slate-500 font-medium">${formatValidDateTime(t.Date)}</span>
+          </td>
+          <td class="py-1 md:py-3 px-0 md:px-6 flex items-center justify-between md:table-cell border-t border-dashed border-slate-100 md:border-none mt-2 pt-2 md:mt-0 md:pt-0">
+            <span class="text-[10px] font-bold text-slate-400 uppercase md:hidden">รายการ</span>
+            <div>${getBadgeHtml(t.Type)}</div>
+          </td>
+          <td class="py-1 md:py-3 px-0 md:px-6 flex items-center justify-between md:table-cell border-t border-dashed border-slate-100 md:border-none mt-2 pt-2 md:mt-0 md:pt-0">
+            <span class="text-[10px] font-bold text-slate-400 uppercase md:hidden">รหัสหนังสือ</span>
+            <span class="font-mono text-xs text-slate-500 font-bold bg-slate-50 md:bg-slate-100 px-2 py-0.5 rounded border border-slate-100 md:border-none">${t.Book_ID}</span>
+          </td>
+          <td class="py-1 md:py-3 px-0 md:px-6 flex flex-col items-start md:table-cell border-t border-dashed border-slate-100 md:border-none mt-2 pt-2 md:mt-0 md:pt-0 cursor-pointer" onclick="goToBook('${t.Book_ID}')">
+            <span class="text-[10px] font-bold text-slate-400 uppercase md:hidden mb-1">ชื่อหนังสือ</span>
+            <div class="font-bold text-slate-700 hover:text-blue-600 transition-colors flex items-start text-left whitespace-normal line-clamp-2 md:line-clamp-none"><div class="pt-0.5 mr-1.5">${iconHtml}</div> <span>${t.Book_Title}</span></div>
+          </td>
+          <td class="py-1 md:py-3 px-0 md:px-6 flex items-center justify-between md:table-cell border-t border-dashed border-slate-100 md:border-none mt-2 pt-2 md:mt-0 md:pt-0">
+            <span class="text-[10px] font-bold text-slate-400 uppercase md:hidden">ผู้ทำรายการ</span>
+            <div class="text-right md:text-left">
+                <div class="font-bold text-slate-700 flex items-center justify-end md:justify-start"><i class="fa-solid fa-circle-user text-slate-300 mr-1.5"></i> ${t.User_Name}</div>
+                <div class="text-[10px] text-slate-400 font-mono mt-0.5">${t.Phone || '-'}</div>
+            </div>
+          </td>
+        </tr>`}).join('') || `<tr><td colspan="5" class="text-center py-8 text-slate-400 font-medium bg-white md:bg-slate-50/50 rounded-2xl md:rounded-none shadow-sm md:shadow-none"><i class="fa-solid fa-clock-rotate-left text-2xl mb-2 block opacity-50"></i>ไม่พบประวัติทำรายการ</td></tr>`;
+        }
+
+        function getBadgeHtml(status) {
+            switch (status) {
+                case 'พร้อมบริการ':
+                case 'Available':
+                case 'Success':
+                    return `<span class="bg-emerald-50 text-emerald-600 border border-emerald-200 text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider"><i class="fa-solid fa-check-circle mr-1"></i>พร้อมบริการ</span>`;
+                case 'ยืมแล้ว':
+                case 'Borrowed':
+                    return `<span class="bg-amber-50 text-amber-600 border border-amber-200 text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider"><i class="fa-solid fa-hand-holding-hand mr-1"></i>ยืมแล้ว</span>`;
+                case 'Borrow':
+                    return `<span class="bg-amber-50 text-amber-600 border border-amber-200 text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider"><i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>ยืม</span>`;
+                case 'Return':
+                    return `<span class="bg-blue-50 text-blue-600 border border-blue-200 text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider"><i class="fa-solid fa-rotate-left mr-1"></i>คืนแล้ว</span>`;
+                default:
+                    return `<span class="bg-slate-100 text-slate-600 border border-slate-200 text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">${status}</span>`;
+            }
+        }
+
+
+        // ==========================================
+        // ASSET TAG PRINT SYSTEM 
+        // ==========================================
+        function toggleSelectAll(sourceId) {
+            const isChecked = document.getElementById(sourceId).checked;
+            document.getElementById('selectAll').checked = isChecked;
+            document.getElementById('selectAllCards').checked = isChecked;
+            document.querySelectorAll('.book-cb').forEach(cb => cb.checked = isChecked);
+            updatePrintButtonState();
+        }
+
+        function updatePrintButtonState() {
+            const checkedCount = document.querySelectorAll('.book-cb:checked').length;
+            const btn = document.getElementById('btn-print-multiple');
+            if (checkedCount > 0) {
+                btn.classList.remove('hidden');
+                document.getElementById('print-count').innerText = checkedCount;
+            } else {
+                btn.classList.add('hidden');
+                document.getElementById('selectAll').checked = false;
+                document.getElementById('selectAllCards').checked = false;
+            }
+        }
+
+        function openPrintSettingsSingle(bookId, title, category) {
+            pendingPrintBooks = [{ id: bookId, title: title, category: category }];
+            setupPrintModal();
+        }
+
+        function openPrintSettingsMultiple() {
+            const checkboxes = document.querySelectorAll('.book-cb:checked');
+            if (checkboxes.length === 0) return;
+            pendingPrintBooks = Array.from(checkboxes).map(cb => {
+                const book = appData.books.find(b => String(b.Book_ID) === String(cb.value));
+                return { id: book.Book_ID, title: book.Title, category: book.Category || '-' };
+            });
+            setupPrintModal();
+        }
+
+        function setupPrintModal() {
+            document.getElementById('config-title').value = "ITTHI หนังสือ";
+            document.getElementById('config-line1').value = pendingPrintBooks[0].id || '';
+            document.getElementById('config-line2').value = pendingPrintBooks[0].title || '';
+            document.getElementById('config-line3').value = pendingPrintBooks[0].category || '';
+            document.getElementById('config-footer').value = "บริษัท อิทธิฤทธิ์ ไนซ์ คอร์ปอเรชั่น จำกัด (มหาชน)";
+            document.getElementById('config-size-slider').value = 100;
+
+            document.querySelector('input[name="config-code-type"][value="barcode"]').checked = true;
+            document.getElementById('print-type').value = 'assetTag';
+
+            updatePrintPreview();
+            openModal('print-config-modal');
+        }
+
+        function updatePrintPreview() {
+            const printType = document.getElementById('print-type').value;
+            const codeType = document.querySelector('input[name="config-code-type"]:checked').value;
+            const sizePercent = document.getElementById('config-size-slider').value;
+            document.getElementById('config-size-value').textContent = `${sizePercent}%`;
+            const scale = sizePercent / 100;
+
+            const title = document.getElementById('config-title').value;
+            const line1 = document.getElementById('config-line1').value || 'NO-ID';
+            const line2 = document.getElementById('config-line2').value || 'No Name';
+            const line3 = document.getElementById('config-line3').value || '';
+            const footer = document.getElementById('config-footer').value;
+            const showLogo = document.getElementById('config-show-logo').checked;
+            const showFooter = document.getElementById('config-show-footer').checked;
+
+            const logoUrl = "https://i.postimg.cc/3JKnHLPJ/LOGO-ITTHI.jpg";
+
+            const assetTagControls = document.querySelectorAll('.asset-tag-only');
+            if (printType === 'assetTag') {
+                assetTagControls.forEach(el => el.style.display = 'block');
+            } else {
+                assetTagControls.forEach(el => el.style.display = 'none');
+            }
+
+            let previewHtml = '';
+
+            if (printType === 'assetTag') {
+                previewHtml = `
+            <div id="preview-wrapper" style="font-family: 'Kanit', sans-serif; border: 2px solid #0891b2; border-radius: 12px; overflow: hidden; width: 400px; background: white; color: #1e293b; transform: scale(${scale}); transform-origin: center;">
+                ${showLogo ? `<div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 2px solid #0891b2;">
+                    <img src="${logoUrl}" alt="Logo" style="height: 30px; width: auto; object-fit: contain; display: block;" crossorigin="anonymous" referrerpolicy="no-referrer">
+                    <h2 style="margin: 0; font-size: 1.1em; font-weight: 700;">${title}</h2>
+                </div>` : `<div style="display: flex; justify-content: center; align-items: center; padding: 10px 15px; border-bottom: 2px solid #0891b2;">
+                    <h2 style="margin: 0; font-size: 1.1em; font-weight: 700;">${title}</h2>
+                </div>`}
+                <div style="display: flex; padding: 12px; gap: 15px; align-items: center;">
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+                        <div style="line-height: 1.2;"><span style="font-size: 0.7em; color: #64748b; font-weight: 600;">รหัส (ID):</span><br><span style="font-weight: 700; font-size: 1.2em; font-family: monospace;">${line1}</span></div>
+                        <div style="line-height: 1.2;"><span style="font-size: 0.7em; color: #64748b; font-weight: 600;">ชื่อ (Name):</span><br><span style="font-weight: 600; font-size: 0.9em;">${line2}</span></div>
+                        <div style="line-height: 1.2;"><span style="font-size: 0.7em; color: #64748b; font-weight: 600;">หมวดหมู่ (CAT):</span><br><span style="font-weight: 500; font-size: 0.8em;">${line3}</span></div>
+                    </div>
+                    <div id="preview-code-container" style="width: 120px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+                        ${codeType === 'barcode' ? '<svg id="preview-barcode"></svg>' : '<div id="preview-qrcode"></div>'}
+                    </div>
+                </div>
+                ${showFooter ? `<div style="background: #0891b2; color: white; padding: 6px 10px; text-align: center; font-size: 0.8em; font-weight: 600;">${footer}</div>` : ''}
+            </div>`;
+            } else {
+                previewHtml = `
+            <div id="preview-wrapper" style="font-family: 'Kanit', sans-serif; text-align: center; padding: 15px; border: 1px solid #ccc; border-radius: 8px; background: white; display: inline-block; transform: scale(${scale}); transform-origin: center; width: 250px;">
+                <p style="font-weight: bold; font-size: 1.1em; margin: 0 0 8px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${line2}</p>
+                <div id="preview-code-container" style="margin: 0 auto; display: flex; justify-content: center;">
+                    ${codeType === 'barcode' ? '<svg id="preview-barcode"></svg>' : '<div id="preview-qrcode"></div>'}
+                </div>
+                <p style="font-family: monospace; font-size: 0.9em; margin: 8px 0 0 0; font-weight: bold;">${line1}</p>
+            </div>`;
+            }
+
+            const previewContainer = document.getElementById('print-preview-content');
+            previewContainer.innerHTML = previewHtml;
+
+            setTimeout(() => {
+                if (codeType === 'barcode') {
+                    try {
+                        const safeLine1 = line1.replace(/[^\x20-\x7E]+/g, '').trim() || 'NO-ID';
+                        JsBarcode("#preview-barcode", safeLine1, {
+                            format: "CODE128", width: 1.8, height: 50, displayValue: false, margin: 0
+                        });
+                    } catch (e) {
+                        document.getElementById('preview-code-container').innerHTML = '<span style="color:red;font-size:12px;">สร้างบาร์โค้ดไม่ได้</span>';
+                    }
+                } else {
+                    const qrContainer = document.getElementById('preview-qrcode');
+                    qrContainer.innerHTML = '';
+                    // 🔴 ให้ QR Code ชี้มาที่เว็บไซต์ Netlify
+                    const qrTextForPreview = FRONTEND_URL + "?m=s&id=" + encodeURIComponent(String(line1).trim());
+                    new QRCode(qrContainer, {
+                        text: qrTextForPreview, width: 100, height: 100,
+                        colorDark: "#1e293b", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.L
+                    });
+                }
+            }, 50);
+        }
+
+        function executePrint() {
+            const printType = document.getElementById('print-type').value;
+            const codeType = document.querySelector('input[name="config-code-type"]:checked').value;
+            const title = document.getElementById('config-title').value;
+            const footer = document.getElementById('config-footer').value;
+            const showLogo = document.getElementById('config-show-logo').checked;
+            const showFooter = document.getElementById('config-show-footer').checked;
+            const scale = document.getElementById('config-size-slider').value / 100;
+            const isSingle = pendingPrintBooks.length === 1;
+
+            const logoUrl = "https://i.postimg.cc/3JKnHLPJ/LOGO-ITTHI.jpg";
+
+            const printData = pendingPrintBooks.map(book => {
+                const rawId = isSingle ? document.getElementById('config-line1').value : book.id;
+                return {
+                    id: rawId,
+                    barcodeId: String(rawId).replace(/[^\x20-\x7E]+/g, '').trim() || 'NO-ID',
+                    name: isSingle ? document.getElementById('config-line2').value : book.title,
+                    info: isSingle ? document.getElementById('config-line3').value : book.category
+                };
+            });
+
+            const generatedCodes = [];
+            printData.forEach((item, i) => {
+                if (codeType === 'barcode') {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        JsBarcode(canvas, item.barcodeId, {
+                            format: "CODE128", width: 1.8, height: 45, displayValue: false, margin: 0
+                        });
+                        generatedCodes[i] = `<img src="${canvas.toDataURL('image/png')}" style="max-width: 100%; height: auto; display: block;">`;
+                    } catch (e) {
+                        generatedCodes[i] = `<span style="color:red;font-size:12px;">สร้างบาร์โค้ดไม่ได้</span>`;
+                    }
+                } else {
+                    generatedCodes[i] = `<div id="print-qrcode-${i}"></div>`;
+                }
+            });
+
+            let htmlContent = '';
+            printData.forEach((item, i) => {
+                if (printType === 'assetTag') {
+                    htmlContent += `
+                <div style="zoom: ${scale}; font-family: 'Kanit', sans-serif; border: 2px solid #0891b2; border-radius: 12px; overflow: hidden; width: 400px; background: white; color: #1e293b; page-break-inside: avoid; margin: 10px;">
+                    ${showLogo ? `<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 2px solid #0891b2;">
+                        <img src="${logoUrl}" alt="Logo" style="height: 30px;" crossorigin="anonymous">
+                        <h2 style="margin: 0; font-size: 1.1em; font-weight: 700;">${title}</h2>
+                    </div>` : `<div style="display: flex; justify-content: center; align-items: center; padding: 8px 12px; border-bottom: 2px solid #0891b2;">
+                        <h2 style="margin: 0; font-size: 1.1em; font-weight: 700;">${title}</h2>
+                    </div>`}
+                    <div style="display: flex; padding: 12px; gap: 12px; align-items: center;">
+                        <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+                            <div style="line-height: 1.2;"><span style="font-size: 0.7em; color: #64748b; font-weight: 600;">รหัส (ID):</span><br><span style="font-weight: 700; font-size: 1.2em; font-family: monospace;">${item.id}</span></div>
+                            <div style="line-height: 1.2;"><span style="font-size: 0.7em; color: #64748b; font-weight: 600;">ชื่อ (Name):</span><br><span style="font-weight: 600; font-size: 0.9em;">${item.name}</span></div>
+                            <div style="line-height: 1.2;"><span style="font-size: 0.7em; color: #64748b; font-weight: 600;">หมวดหมู่ (CAT):</span><br><span style="font-weight: 500; font-size: 0.8em;">${item.info}</span></div>
+                        </div>
+                        <div id="print-code-${i}" class="print-code-container" style="width: 110px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;">
+                            ${generatedCodes[i]}
+                        </div>
+                    </div>
+                    ${showFooter ? `<div style="background: #0891b2; color: white; padding: 4px 10px; text-align: center; font-size: 0.75em; font-weight: 600;">${footer}</div>` : ''}
+                </div>`;
+                } else {
+                    htmlContent += `
+                <div style="zoom: ${scale}; font-family: 'Kanit', sans-serif; text-align: center; padding: 15px; border: 1px solid #ccc; border-radius: 8px; background: white; display: inline-block; page-break-inside: avoid; width: 250px; margin: 10px;">
+                    <p style="font-weight: bold; font-size: 1.1em; margin: 0 0 8px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name}</p>
+                    <div id="print-code-${i}" style="margin: 0 auto; display: flex; justify-content: center;">
+                        ${generatedCodes[i]}
+                    </div>
+                    <p style="font-family: monospace; font-size: 0.9em; margin: 8px 0 0 0; font-weight: bold;">${item.id}</p>
+                </div>`;
+                }
+            });
+
+            const printWindow = window.open('', '_blank');
+            if (!printWindow) {
+                showToast('warning', 'กรุณาอนุญาต Pop-ups');
+                return;
+            }
+
+            printWindow.document.write(`
+            <html><head><title>Print Asset Tags</title>
+            <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+            <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"><\/script>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+            <style>
+                @media print { @page { margin: 5mm; } body { -webkit-print-color-adjust: exact; print-color-adjust: exact; margin: 0; } }
+                body { display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: flex-start; }
+            </style>
+            </head><body>${htmlContent}
+            <script>
+                window.onload = function() {
+                    const items = ${JSON.stringify(printData)};
+                    const codeType = '${codeType}';
+                    const frontEndUrl = '${FRONTEND_URL}';
+
+                    items.forEach((item, i) => {
+                        if (codeType === 'barcode') {
+                            try {
+                                if (typeof JsBarcode !== 'undefined') {
+                                    JsBarcode("#print-barcode-" + i, item.barcodeId, {
+                                        format: "CODE128", width: 1.8, height: 45, displayValue: false, margin: 0
+                                    });
+                                }
+                            } catch(e) { console.error("Barcode Error:", e); }
+                        } else {
+                            try {
+                                if (typeof QRCode !== 'undefined') {
+                                    // 🔴 ให้ QR Code ชี้มาที่เว็บไซต์ Netlify
+                                    const qrTextForPrint = frontEndUrl + "?m=s&id=" + encodeURIComponent(String(item.id).trim());
+                                    new QRCode(document.getElementById("print-qrcode-" + i), {
+                                        text: qrTextForPrint, width: 100, height: 100,
+                                        colorDark : "#1e293b", colorLight : "#ffffff", correctLevel : QRCode.CorrectLevel.L
+                                    });
+                                }
+                            } catch(e) { console.error("QR Error:", e); }
+                        }
+                    });
+                    
+                    setTimeout(function() {
+                        window.print();
+                        window.close();
+                    }, 500); 
+                };
+            <\/script></body></html>`);
+            printWindow.document.close();
+        }
+
+
+        // ==========================================
+        // SCANNER & TRANSACTION LOGIC
+        // ==========================================
+        function setScanMode(mode) {
+            scanMode = mode;
+            const slider = document.getElementById('mode-slider');
+            const btnBorrow = document.getElementById('btn-mode-borrow');
+            const btnReturn = document.getElementById('btn-mode-return');
+            const userInput = document.getElementById('user-input-section');
+
+            if (mode === 'Borrow') {
+                slider.style.transform = 'translateX(0)';
+                btnBorrow.classList.replace('text-slate-500', 'text-blue-600');
+                btnReturn.classList.replace('text-blue-600', 'text-slate-500');
+                userInput.classList.remove('hidden');
+                userInput.style.opacity = '1';
+                userInput.style.height = 'auto';
+            } else {
+                slider.style.transform = 'translateX(100%)';
+                btnReturn.classList.replace('text-slate-500', 'text-blue-600');
+                btnBorrow.classList.replace('text-blue-600', 'text-slate-500');
+                userInput.style.opacity = '0';
+                setTimeout(() => userInput.classList.add('hidden'), 200);
+            }
+
+            document.getElementById('userName').value = '';
+            document.getElementById('userPhone').value = '';
+
+            if (!isSelfMode || !urlBookId) {
+                document.getElementById('bookCode').value = '';
+            }
+        }
+
+        function startScanner() {
+            if (isSelfMode) return;
+            if (scannerIsRunning) return;
+            const statusIndicator = document.getElementById('camera-status');
+
+            statusIndicator.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> กำลังเตรียมกล้อง...';
+
+            html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 250, height: 120 } },
+                (decodedText) => {
+                    let finalBookCode = decodedText;
+                    try {
+                        if (decodedText.includes('m=s') && decodedText.includes('id=')) {
+                            const parsedUrl = new URL(decodedText);
+                            finalBookCode = parsedUrl.searchParams.get('id') || decodedText;
+                        } else if (decodedText.includes('mode=self') && decodedText.includes('bookId=')) {
+                            const parsedUrl = new URL(decodedText);
+                            finalBookCode = parsedUrl.searchParams.get('bookId') || decodedText;
+                        }
+                    } catch (e) { }
+
+                    document.getElementById('bookCode').value = finalBookCode;
+
+                    const scannedBook = appData.books.find(b => String(b.Book_ID) === String(finalBookCode));
+
+                    // แสดงชื่อหนังสือทันทีที่สแกนเจอ
+                    if (isSelfMode && scannedBook) {
+                        document.getElementById('self-book-info').classList.remove('hidden');
+                        document.getElementById('self-book-title').innerText = scannedBook.Title;
+                        document.getElementById('self-book-title').classList.remove('text-red-500');
+
+                        const btnSubmit = document.getElementById('btn-submit-transaction');
+                        if (btnSubmit) {
+                            btnSubmit.disabled = false;
+                            btnSubmit.classList.remove('opacity-50', 'cursor-not-allowed');
+                        }
+                    }
+
+                    if (isSelfMode) {
+                        if (scannedBook && scannedBook.Status === 'ยืมแล้ว') {
+                            // ถ้าถูกยืมอยู่ ให้เด้ง Popup การคืนอัตโนมัติ
+                            submitTransaction();
+                        } else {
+                            if (scannerIsRunning) {
+                                stopScanner();
+                                const statusIndicator = document.getElementById('camera-status');
+                                statusIndicator.innerHTML = '<i class="fa-solid fa-check-circle mr-1.5 text-emerald-500"></i> สแกนรหัสสำเร็จ';
+                                statusIndicator.className = 'flex items-center text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full uppercase tracking-wider';
+                            }
+                            showToast('success', 'สแกนรหัสสำเร็จ กรุณากรอกชื่อผู้ยืม');
+                            document.getElementById('userName').focus();
+                        }
+                    } else {
+                        if (scannedBook && scannedBook.Status === 'ยืมแล้ว') {
+                            submitTransaction();
+                        } else if (scanMode === 'Borrow' && !document.getElementById('userName').value.trim()) {
+                            showToast('warning', 'กรุณากรอกชื่อผู้ยืมก่อนสแกน');
+                            if (scannerIsRunning) {
+                                html5QrCode.pause();
+                                setTimeout(() => {
+                                    if (scannerIsRunning && html5QrCode) html5QrCode.resume();
+                                }, 2000);
+                            }
+                            document.getElementById('userName').focus();
+                        } else {
+                            submitTransaction();
+                        }
+                    }
+                }
+            ).then(() => {
+                scannerIsRunning = true;
+                statusIndicator.innerHTML = '<span class="relative flex h-2 w-2 mr-1.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span></span> กล้องทำงานแล้ว';
+                statusIndicator.className = 'flex items-center text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full uppercase tracking-wider shadow-sm';
+            }).catch(err => {
+                statusIndicator.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1.5 text-red-500"></i> กล้องไม่พร้อมใช้งาน';
+                statusIndicator.className = 'flex items-center text-[10px] font-bold text-red-600 bg-red-50 border border-red-100 px-2.5 py-1 rounded-full uppercase tracking-wider';
+            });
+        }
+
+        function stopScanner() {
+            if (scannerIsRunning && html5QrCode) {
+                html5QrCode.stop().then(() => { scannerIsRunning = false; }).catch(err => console.log("Failed to stop scanner"));
+            }
+        }
+
+        // ฟังก์ชันใหม่: เพื่อเด้ง Popup คืนหนังสือโดยเฉพาะ
+        function promptReturnBook(bookCode) {
+            const scannedBook = appData.books.find(b => String(b.Book_ID) === String(bookCode));
+            if (!scannedBook) return;
+
+            setScanMode('Return');
+
+            if (scannerIsRunning && html5QrCode) html5QrCode.pause();
+
+            const lastTrans = appData.transactions.find(t => String(t.Book_ID) === String(bookCode) && t.Type === 'Borrow');
+            let borrowerName = lastTrans && lastTrans.User_Name ? lastTrans.User_Name : 'ไม่ทราบชื่อ';
+            let dateStr = lastTrans ? formatValidDateTime(lastTrans.Date) : '-';
+            let daysBorrowed = 0;
+
+            if (lastTrans && lastTrans.Date) {
+                const borrowDate = parseAppDate(lastTrans.Date);
+                if (!isNaN(borrowDate.getTime())) {
+                    const now = new Date();
+                    const diffTime = Math.abs(new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(borrowDate.getFullYear(), borrowDate.getMonth(), borrowDate.getDate()));
+                    daysBorrowed = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                }
+            }
+
+            Swal.fire({
+                title: 'คืนหนังสือเล่มนี้ใช่หรือไม่?',
+                html: `
+              <div class="text-left text-sm mt-2 bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-inner">
+                  <div class="mb-3"><span class="text-slate-500 font-bold text-[10px] uppercase">ชื่อหนังสือ</span><br><span class="font-bold text-slate-800 text-base">${scannedBook.Title}</span></div>
+                  <div class="grid grid-cols-2 gap-2">
+                      <div><span class="text-slate-500 font-bold text-[10px] uppercase">ผู้ยืม</span><br><span class="font-bold text-blue-600">${borrowerName}</span></div>
+                      <div><span class="text-slate-500 font-bold text-[10px] uppercase">ระยะเวลายืม</span><br><span class="${daysBorrowed > 30 ? 'text-red-600' : 'text-emerald-600'} font-bold">${daysBorrowed} วัน</span></div>
+                  </div>
+                  <div class="mt-3"><span class="text-slate-500 font-bold text-[10px] uppercase">วันที่ยืม</span><br><span class="text-slate-700 text-xs">${dateStr}</span></div>
+              </div>
+            `,
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: '<i class="fa-solid fa-check mr-1"></i> ยืนยันคืนหนังสือ',
+                cancelButtonText: 'ยกเลิก',
+                customClass: { popup: 'rounded-2xl' },
+                allowOutsideClick: false
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    executeTransaction(bookCode, lastTrans ? lastTrans.User_Name : 'System (คืน)', '-', 'Return');
+                } else {
+                    if (!isSelfMode) {
+                        document.getElementById('bookCode').value = '';
+                    }
+                    if (scannerIsRunning && html5QrCode) html5QrCode.resume();
+                }
+            });
+        }
+
+        function submitTransaction() {
+            const bookCode = document.getElementById('bookCode').value.trim();
+
+            if (!bookCode) {
+                showToast('warning', 'โปรดระบุรหัสหนังสือ');
+                return;
+            }
+
+            const scannedBook = appData.books.find(b => String(b.Book_ID) === String(bookCode));
+            if (!scannedBook) {
+                showToast('warning', 'ไม่พบรหัสหนังสือนี้ในระบบ');
+                document.getElementById('bookCode').value = '';
+                if (scannerIsRunning) {
+                    html5QrCode.pause();
+                    setTimeout(() => { if (scannerIsRunning && html5QrCode) html5QrCode.resume(); }, 1500);
+                }
+                return;
+            }
+
+            // --- ถ้าระบบพบว่าหนังสือสถานะ "ยืมแล้ว" ให้เด้ง Popup คืนหนังสือทันที (ไม่ต้องสนว่าอยู่โหมดไหน) ---
+            if (scannedBook.Status === 'ยืมแล้ว') {
+                promptReturnBook(bookCode);
+                return; // จบการทำงานของฟังก์ชันทันที
+            }
+
+            // --- ถ้าหนังสือ "พร้อมบริการ" ---
+            if (scanMode === 'Return') {
+                showToast('warning', 'หนังสือเล่มนี้ไม่ได้ถูกยืมอยู่');
+                document.getElementById('bookCode').value = '';
+                if (scannerIsRunning) {
+                    html5QrCode.pause();
+                    setTimeout(() => { if (scannerIsRunning && html5QrCode) html5QrCode.resume(); }, 1500);
+                }
+                return;
+            }
+
+            // เข้าสู่กระบวนการยืม (Borrow Mode)
+            let userName = document.getElementById('userName').value.trim();
+            let userPhone = document.getElementById('userPhone').value.trim();
+
+            if (!userName) {
+                showToast('warning', 'โปรดระบุชื่อผู้ยืม');
+                document.getElementById('userName').focus();
+                if (scannerIsRunning) {
+                    html5QrCode.pause();
+                    setTimeout(() => { if (scannerIsRunning && html5QrCode) html5QrCode.resume(); }, 1500);
+                }
+                return;
+            }
+            if (!userPhone || userPhone.length < 12) {
+                showToast('warning', 'โปรดระบุเบอร์โทรให้ถูกต้อง');
+                return;
+            }
+
+            executeTransaction(bookCode, userName, userPhone, 'Borrow');
+        }
+
+        function executeTransaction(bookCode, userName, userPhone, actionMode) {
+            if (scannerIsRunning) html5QrCode.pause();
+            showLoading(true, 'กำลังบันทึกรายการ...', 'PROCESSING...');
+
+            callServer('processTransaction', {
+                bookCode: bookCode,
+                userName: userName,
+                userPhone: userPhone,
+                scanMode: actionMode
+            })
+                .then(res => {
+                    showLoading(false);
+                    if (res.status === 'success') {
+                        if (isSelfMode) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'ทำรายการสำเร็จ!',
+                                html: `คุณได้ทำการ <b>${actionMode === 'Borrow' ? 'ยืม' : 'คืน'}</b><br>หนังสือ "${res.bookTitle}" เรียบร้อยแล้ว`,
+                                confirmButtonText: 'รับทราบ (ปิดหน้าต่างนี้ได้เลย)',
+                                confirmButtonColor: '#2563eb',
+                                allowOutsideClick: false
+                            }).then(() => {
+                                document.getElementById('userName').value = '';
+                                document.getElementById('userPhone').value = '';
+                                document.getElementById('bookCode').value = '';
+                                document.getElementById('self-book-info').classList.add('hidden');
+                            });
+                        } else {
+                            showToast('success', 'ทำรายการสำเร็จ!');
+                        }
+
+                        const book = appData.books.find(b => String(b.Book_ID) === String(bookCode));
+                        if (book) {
+                            if (actionMode === 'Borrow') {
+                                book.Status = 'ยืมแล้ว';
+                                if (appData.dashboard.borrowedBooks !== undefined) {
+                                    appData.dashboard.borrowedBooks++;
+                                    appData.dashboard.availableBooks--;
+                                }
+                            } else {
+                                book.Status = 'พร้อมบริการ';
+                                if (appData.dashboard.borrowedBooks !== undefined) {
+                                    appData.dashboard.borrowedBooks--;
+                                    appData.dashboard.availableBooks++;
+                                }
+                            }
+                        }
+                        const newTrans = {
+                            Date: new Date().toISOString(), Type: actionMode, Book_ID: bookCode,
+                            Book_Title: res.bookTitle || (book ? book.Title : bookCode),
+                            User_Name: userName, Phone: userPhone
+                        };
+                        appData.transactions.unshift(newTrans);
+
+                        if (appData.dashboard.recentTrans) {
+                            appData.dashboard.recentTrans.unshift({
+                                date: new Date().toISOString(), type: actionMode, bookId: bookCode, bookTitle: newTrans.Book_Title,
+                                userName: userName, phone: userPhone
+                            });
+                            if (appData.dashboard.recentTrans.length > 5) appData.dashboard.recentTrans.pop();
+                        }
+                        renderAllViews();
+
+                        if (!isSelfMode) {
+                            document.getElementById('bookCode').value = '';
+                        }
+                        fetchInitialData(true);
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'ไม่สามารถทำรายการได้',
+                            text: res.message,
+                            confirmButtonText: 'ตกลง',
+                            confirmButtonColor: '#ef4444'
+                        });
+                        document.getElementById('bookCode').value = '';
+                    }
+                    if (scannerIsRunning) setTimeout(() => html5QrCode.resume(), 1500);
+                })
+                .catch(err => {
+                    showLoading(false);
+                    showToast('error', 'เชื่อมต่อขัดข้อง ลองใหม่อีกครั้ง');
+                    if (scannerIsRunning) html5QrCode.resume();
+                });
+        }
+
+        function goToBook(bookId) {
+            if (!bookId || bookId === '-') return;
+            switchView('books');
+            setTimeout(() => {
+                const book = appData.books.find(b => String(b.Book_ID) === String(bookId));
+                if (book) {
+                    if (currentBookView === 'card') {
+                        showBookDetailsCard(bookId);
+                    } else {
+                        if (!expandedRows.has(String(bookId))) {
+                            toggleRowDetails(bookId, book._rowIndex);
+                        }
+                        const detailRow = document.getElementById('detail-' + book._rowIndex);
+                        if (detailRow) {
+                            detailRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            detailRow.classList.add('bg-blue-50');
+                            setTimeout(() => detailRow.classList.remove('bg-blue-50'), 2000);
+                        }
+                    }
+                } else {
+                    showToast('warning', 'ไม่พบข้อมูลหนังสือเล่มนี้');
+                }
+            }, 100);
+        }
+
+        // ==========================================
+        // IMAGE & CRUD OPERATIONS
+        // ==========================================
+
+        // --- โค้ดส่วนจัดการรูปภาพใหม่ (บีบอัดลง Sheet โดยตรง) ---
+        function previewSelectedImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const img = new Image();
+                    img.onload = function () {
+                        // วาดภาพลง Canvas เพื่อบีบอัดขนาดให้อยู่ในลิมิตของเซลล์ Google Sheets
+                        const canvas = document.createElement('canvas');
+
+                        // ปรับขนาดความละเอียดเป็น "ขนาดปกติ" เพื่อให้ภาพชัดเจนขึ้น
+                        const MAX_WIDTH = 600;
+                        const MAX_HEIGHT = 800;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // บีบอัดแบบไดนามิกเพื่อให้ไม่เกิน 48,000 ตัวอักษร (ลิมิตสูงสุดคือ 50,000)
+                        let quality = 0.8;
+                        currentBase64Image = canvas.toDataURL('image/jpeg', quality);
+
+                        while (currentBase64Image.length > 48000 && quality > 0.1) {
+                            quality -= 0.15;
+                            currentBase64Image = canvas.toDataURL('image/jpeg', quality);
+                        }
+
+                        // ถ้ายังเกินอยู่ (เช่นภาพที่มีรายละเอียดเยอะมาก) ให้ลดขนาด pixel ลงอีก 30%
+                        let attempt = 0;
+                        while (currentBase64Image.length > 48000 && attempt < 3) {
+                            attempt++;
+                            const canvas2 = document.createElement('canvas');
+                            canvas2.width = canvas.width * 0.7;
+                            canvas2.height = canvas.height * 0.7;
+                            const ctx2 = canvas2.getContext('2d');
+                            ctx2.drawImage(canvas, 0, 0, canvas2.width, canvas2.height);
+
+                            canvas.width = canvas2.width;
+                            canvas.height = canvas2.height;
+                            const ctxFinal = canvas.getContext('2d');
+                            ctxFinal.drawImage(canvas2, 0, 0);
+
+                            quality = 0.6;
+                            currentBase64Image = canvas.toDataURL('image/jpeg', quality);
+                            while (currentBase64Image.length > 48000 && quality > 0.1) {
+                                quality -= 0.15;
+                                currentBase64Image = canvas.toDataURL('image/jpeg', quality);
+                            }
+                        }
+
+                        document.getElementById('b_image_preview').src = currentBase64Image;
+                        document.getElementById('b_image_preview_box').classList.remove('hidden');
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function clearImageSelect() {
+            currentBase64Image = null;
+            document.getElementById('b_image_file').value = '';
+            document.getElementById('b_image_url').value = '';
+            document.getElementById('b_image_preview').src = '';
+            document.getElementById('b_image_preview_box').classList.add('hidden');
+        }
+
+        function handleBookSubmit(e) {
+            e.preventDefault();
+
+            const bookId = document.getElementById('b_id').value;
+            let imageUrl = document.getElementById('b_image_url').value;
+
+            // 🔴 บันทึก Base64 ลงตัวแปรโดยตรง (ไม่ต้องพึ่ง Google Drive อีกต่อไป)
+            if (currentBase64Image) {
+                imageUrl = currentBase64Image;
+            }
+
+            const data = {
+                _rowIndex: document.getElementById('b_rowIndex').value,
+                Book_ID: bookId,
+                Title: document.getElementById('b_title').value,
+                Author: document.getElementById('b_author').value,
+                Category: document.getElementById('b_category').value,
+                Image_URL: imageUrl
+            };
+
+            closeModal('bookModal');
+            showLoading(true, 'กำลังบันทึกข้อมูล...', 'UPDATING DATABASE...');
+
+            callServer('saveBook', { data: data })
+                .then(res => {
+                    showLoading(false);
+                    if (res.status === 'success') {
+                        showToast('success', res.message);
+
+                        if (data._rowIndex) {
+                            const idx = appData.books.findIndex(b => String(b._rowIndex) === String(data._rowIndex));
+                            if (idx > -1) {
+                                appData.books[idx].Title = data.Title;
+                                appData.books[idx].Author = data.Author;
+                                appData.books[idx].Category = data.Category;
+                                appData.books[idx].Image_URL = data.Image_URL;
+                            }
+                        } else {
+                            data.Status = 'พร้อมบริการ';
+                            data.Last_Updated = new Date().toISOString();
+                            appData.books.push(data);
+                            if (appData.dashboard.totalBooks !== undefined) {
+                                appData.dashboard.totalBooks++;
+                                appData.dashboard.availableBooks++;
+                            }
+                        }
+                        renderAllViews();
+                        fetchInitialData(true);
+                    }
+                    else { showToast('error', res.message); }
+                })
+                .catch(err => {
+                    showLoading(false);
+                    showToast('error', 'เชื่อมต่อขัดข้อง: ' + err.message);
+                });
+        }
+
+        function deleteRecord(sheetName, rowIndex) {
+            Swal.fire({
+                title: 'ยืนยันการลบรายการนี้?',
+                text: "ข้อมูลเมื่อลบแล้วจะไม่สามารถกู้คืนได้!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: '<i class="fa-solid fa-trash mr-1"></i> ลบรายการ',
+                cancelButtonText: 'ยกเลิก',
+                customClass: { popup: 'rounded-2xl' }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    showLoading(true, 'กำลังลบข้อมูล...', 'DELETING RECORD...');
+
+                    callServer('deleteRow', { sheetName: sheetName, rowIndex: rowIndex })
+                        .then(res => {
+                            showLoading(false);
+                            if (res.status === 'success') {
+                                showToast('success', 'ลบข้อมูลสำเร็จ');
+
+                                if (sheetName === 'Books') {
+                                    const book = appData.books.find(b => String(b._rowIndex) === String(rowIndex));
+                                    if (book && appData.dashboard.totalBooks !== undefined) {
+                                        if (book.Status === 'พร้อมบริการ') appData.dashboard.availableBooks--;
+                                        else appData.dashboard.borrowedBooks--;
+                                        appData.dashboard.totalBooks--;
+                                    }
+                                    appData.books = appData.books.filter(b => String(b._rowIndex) !== String(rowIndex));
+                                }
+                                renderAllViews();
+                                fetchInitialData(true);
+                            } else {
+                                showToast('error', res.message);
+                            }
+                        })
+                        .catch(err => {
+                            showLoading(false);
+                            showToast('error', 'เชื่อมต่อขัดข้อง');
+                        });
+                }
+            });
+            history.pushState({ modal: 'sweetalert' }, "", "#delete");
+        }
+
+        function editBook(b) {
+            document.getElementById('b_rowIndex').value = b._rowIndex;
+            document.getElementById('b_id').value = b.Book_ID;
+            document.getElementById('b_id').readOnly = true;
+            document.getElementById('b_id').classList.add('bg-slate-100', 'cursor-not-allowed', 'text-slate-400');
+            document.getElementById('b_title').value = b.Title;
+            document.getElementById('b_author').value = b.Author;
+            document.getElementById('b_category').value = b.Category;
+
+            clearImageSelect();
+            if (b.Image_URL) {
+                document.getElementById('b_image_url').value = b.Image_URL;
+                document.getElementById('b_image_preview').src = b.Image_URL;
+                document.getElementById('b_image_preview_box').classList.remove('hidden');
+            }
+
+            document.getElementById('bookModalTitle').innerHTML = '<i class="fa-solid fa-pen-to-square mr-2 text-blue-600"></i>แก้ไขข้อมูลหนังสือ';
+            openModal('bookModal');
+        }
+
+        // ==========================================
+        // MODAL UTILS
+        // ==========================================
+        function openModal(id) {
+            if (id === 'bookModal' && !document.getElementById('b_rowIndex').value) {
+                document.getElementById('bookForm').reset();
+                clearImageSelect();
+                document.getElementById('b_id').readOnly = false;
+                document.getElementById('b_id').classList.remove('bg-slate-100', 'cursor-not-allowed', 'text-slate-400');
+                document.getElementById('bookModalTitle').innerHTML = '<i class="fa-solid fa-book-medical mr-2 text-blue-600"></i>เพิ่มหนังสือใหม่';
+            }
+
+            const modal = document.getElementById(id);
+            const content = document.getElementById(id + 'Content');
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.replace('opacity-0', 'opacity-100');
+                if (content) content.classList.replace('scale-95', 'scale-100');
+            }, 10);
+
+            history.pushState({ modal: id }, "", "#modal-" + id);
+        }
+
+        function closeModal(id) {
+            if (history.state && history.state.modal === id) {
+                history.back();
+            } else {
+                closeModalUIOnly(id);
+            }
+        }
+
+        function closeModalUIOnly(id) {
+            const modal = document.getElementById(id);
+            const content = document.getElementById(id + 'Content');
+            if (!modal) return;
+
+            modal.classList.replace('opacity-100', 'opacity-0');
+            if (content) content.classList.replace('scale-100', 'scale-95');
+
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                if (id === 'bookModal') {
+                    document.getElementById('b_rowIndex').value = '';
+                    clearImageSelect();
+                }
+            }, 300);
+        }
+    </script>
+</body>
+
+</html>
