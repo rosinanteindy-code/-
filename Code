@@ -1,0 +1,1528 @@
+const SPREADSHEET_ID = '1FFoBPGw2FbJMiwWQHg_u0xfju0DSf8wcx1L5lDa3UW4';
+const FOLDER_ID = '1VxkUwTeTEKSA11PPhMbqKvnnFXX0VgbJ';
+
+const SHEET_NAME = 'เคลม';
+const EMPLOYEE_SHEET_NAME = 'Employees';
+const USERS_SHEET_NAME = 'Users';
+const TRANSPORT_SHEET_NAME = 'TransportProviders';
+const PRODUCT_SHEET_NAME = 'Products';
+
+function getOrCreateSheet(ss, sheetName, headers) {
+    let sheet = ss.getSheetByName(sheetName);
+    if (!sheet) {
+        sheet = ss.insertSheet(sheetName);
+        if (headers && headers.length > 0) {
+            sheet.appendRow(headers);
+            sheet.setFrozenRows(1);
+            Logger.log(`Created new sheet: "${sheetName}" with headers.`);
+        }
+    }
+    return sheet;
+}
+
+function initializeSheets() {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const requiredSheets = {
+        [SHEET_NAME]: ['เลขที่ใบสั่งงาน', 'เลขที่เอกสารอ้างอิง', 'วันที่แจ้ง', 'ผู้แจ้ง', 'ความต้องการ', 'ประเภทการแจ้ง', 'ชื่อลูกค้า', 'เลขบิล', 'ผู้ติดต่อ', 'เบอร์ติดต่อ', 'ที่อยู่', 'ชื่อขนส่ง', 'แผนที่ (Link)', 'ความพร้อมหน้างาน', 'รูปงานเคลม', 'รายละเอียดงาน', 'สถานะ', 'ผู้ดำเนินการ', 'ActionHistory', 'รูปภาพหลังดำเนินการ', 'RelatedDocuments', 'LastModified'],
+        [EMPLOYEE_SHEET_NAME]: ['Name', 'Phone', 'Status'],
+        [USERS_SHEET_NAME]: ['Username', 'Password', 'Role', 'Status', 'FailedAttempts'],
+        [TRANSPORT_SHEET_NAME]: ['Name', 'Phone', 'Status'],
+        [PRODUCT_SHEET_NAME]: ['ProductCode', 'ProductName', 'Details'],
+    };
+
+    for (const sheetName in requiredSheets) {
+        getOrCreateSheet(ss, sheetName, requiredSheets[sheetName]);
+    }
+}
+
+function doGet(e) {
+    try {
+        initializeSheets(); // ตรวจสอบ/สร้างชีตทุกครั้งที่โหลด
+        return HtmlService.createHtmlOutputFromFile('Index')
+            .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+            .setSandboxMode(HtmlService.SandboxMode.IFRAME)
+            .setTitle('Livinghome - งานเคลม')
+            .setFaviconUrl('https://img.icons8.com/color/48/hammer.png')
+            .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    } catch (error) {
+        Logger.log('FATAL ERROR in doGet: ' + error.stack);
+        return HtmlService.createHtmlOutput(`<h1>เกิดข้อผิดพลาดร้ายแรง</h1><p>ไม่สามารถโหลดแอปพลิเคชันได้ โปรดติดต่อผู้ดูแลระบบ</p><p>Error: ${error.message}</p>`);
+    }
+}
+
+function getUserRole(email) {
+    if (!email) return null;
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, USERS_SHEET_NAME, ['Username', 'Password', 'Role', 'Status', 'FailedAttempts']);
+
+        const data = sheet.getDataRange().getValues();
+        const headers = data[0].map(h => h.trim());
+        const userCol = headers.indexOf('Username');
+        const roleCol = headers.indexOf('Role');
+        const statusCol = headers.indexOf('Status');
+
+        if (userCol === -1 || roleCol === -1 || statusCol === -1) return null;
+
+        const userRow = data.find(row => row[userCol].toLowerCase() === email.toLowerCase() && row[statusCol] === 'active');
+
+        return userRow ? userRow[roleCol] : null;
+    } catch (e) {
+        Logger.log('Error in getUserRole: ' + e.stack);
+        return null;
+    }
+}
+
+function authenticateUser(username, password) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        let sheet = getOrCreateSheet(ss, USERS_SHEET_NAME, ['Username', 'Password', 'Role', 'Status', 'FailedAttempts']);
+
+        const data = sheet.getDataRange().getValues();
+        const headers = data[0].map(h => h.trim());
+        const userCol = headers.indexOf('Username');
+        const passCol = headers.indexOf('Password');
+        const roleCol = headers.indexOf('Role');
+        const statusCol = headers.indexOf('Status');
+        const attemptsCol = headers.indexOf('FailedAttempts');
+
+        if ([userCol, passCol, roleCol, statusCol, attemptsCol].includes(-1)) {
+            return { status: 'error', message: 'ชีตผู้ใช้มีโครงสร้างไม่ถูกต้อง' };
+        }
+
+        const rowIndex = data.findIndex(row => row[userCol].toLowerCase() === username.toLowerCase());
+
+        if (rowIndex === -1) {
+            return { status: 'error', message: 'ไม่พบชื่อผู้ใช้นี้ในระบบ' };
+        }
+
+        const userRow = data[rowIndex];
+        if (userRow[statusCol] === 'locked') {
+            return { status: 'error', message: 'บัญชีของคุณถูกล็อก กรุณาติดต่อผู้ดูแลระบบ' };
+        }
+        if (userRow[statusCol] === 'pending') {
+            return { status: 'error', message: 'บัญชีของคุณยังไม่ได้รับการอนุมัติ' };
+        }
+        if (userRow[statusCol] !== 'active') {
+            return { status: 'error', message: 'บัญชีของคุณไม่พร้อมใช้งาน' };
+        }
+
+        if (userRow[passCol].toString() === password.toString()) {
+            if (userRow[attemptsCol] > 0) {
+                sheet.getRange(rowIndex + 1, attemptsCol + 1).setValue(0);
+            }
+            const authToken = Utilities.getUuid();
+            const sessionData = {
+                email: username.toLowerCase(),
+                role: userRow[roleCol]
+            };
+            PropertiesService.getScriptProperties().setProperty(authToken, JSON.stringify(sessionData));
+
+            return { status: 'success', role: userRow[roleCol], token: authToken, email: username.toLowerCase() };
+        } else {
+            let attempts = parseInt(userRow[attemptsCol], 10) || 0;
+            attempts++;
+            sheet.getRange(rowIndex + 1, attemptsCol + 1).setValue(attempts);
+
+            if (attempts >= 3) {
+                sheet.getRange(rowIndex + 1, statusCol + 1).setValue('locked');
+                return { status: 'error', message: 'รหัสผ่านไม่ถูกต้อง บัญชีของคุณถูกล็อกแล้ว' };
+            } else {
+                return { status: 'error', message: `รหัสผ่านไม่ถูกต้อง (เหลือ ${3 - attempts} ครั้ง)` };
+            }
+        }
+    } catch (e) {
+        Logger.log('ERROR in authenticateUser: ' + e.stack);
+        return { status: 'error', message: `เกิดข้อผิดพลาดในการยืนยันตัวตน: ${e.message}` };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function registerUser(email, password) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, USERS_SHEET_NAME, ['Username', 'Password', 'Role', 'Status', 'FailedAttempts']);
+
+        const data = sheet.getDataRange().getValues();
+        const headers = data[0].map(h => h.trim());
+        const userCol = headers.indexOf('Username');
+
+        const userExists = data.some(row => row[userCol].toLowerCase() === email.toLowerCase());
+        if (userExists) {
+            return { status: 'error', message: 'อีเมลนี้ถูกใช้งานแล้ว' };
+        }
+
+        sheet.appendRow([email, password, 'user', 'pending', 0]);
+
+        return { status: 'success', message: 'สมัครสมาชิกสำเร็จ' };
+
+    } catch (e) {
+        Logger.log('ERROR in registerUser: ' + e.stack);
+        return { status: 'error', message: `เกิดข้อผิดพลาด: ${e.message}` };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function verifySession(authToken) {
+    if (!authToken) {
+        return { status: 'error', message: 'No token provided.' };
+    }
+    try {
+        const cached = PropertiesService.getScriptProperties().getProperty(authToken);
+        if (cached) {
+            const sessionData = JSON.parse(cached);
+            return { status: 'success', data: sessionData };
+        } else {
+            return { status: 'error', message: 'Session expired or invalid.' };
+        }
+    } catch (e) {
+        Logger.log(`Error verifying session: ${e.message}`);
+        return { status: 'error', message: `Session verification failed: ${e.message}` };
+    }
+}
+
+function logoutUser(authToken) {
+    if (authToken) {
+        try {
+            PropertiesService.getScriptProperties().deleteProperty(authToken);
+        } catch (e) {
+            Logger.log(`Error during logout (removing token): ${e.message}`);
+        }
+    }
+}
+
+function getInitialData() {
+    try {
+        initializeSheets(); // Ensure all sheets exist before fetching data
+
+        const repairDataResult = getRepairData();
+        if (repairDataResult.status === 'error') return repairDataResult;
+
+        const employeeDataResult = getEmployeeData();
+        if (employeeDataResult.status === 'error') Logger.log(`Warning: Could not retrieve employee data. ${employeeDataResult.message}`);
+
+        const sheetState = getSheetState().data;
+        const webAppUrl = ScriptApp.getService().getUrl();
+
+        return {
+            status: 'success',
+            data: {
+                repairData: repairDataResult.data || [],
+                employeeData: employeeDataResult.data || [],
+                webAppUrl: webAppUrl,
+                sheetState: sheetState
+            }
+        };
+    } catch (error) {
+        Logger.log('ERROR in getInitialData: ' + error.stack);
+        return {
+            status: 'error',
+            message: `Failed to load initial data: ${error.message}`
+        };
+    }
+}
+
+function getSheetState() {
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, SHEET_NAME, []);
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.trim());
+        const lastModifiedColIndex = headers.indexOf('LastModified');
+
+        let latestTimestamp = '';
+        if (lastModifiedColIndex !== -1 && sheet.getLastRow() > 1) {
+            const timestamps = sheet.getRange(2, lastModifiedColIndex + 1, sheet.getLastRow() - 1, 1).getValues()
+                .flat()
+                .filter(String);
+            if (timestamps.length > 0) {
+                timestamps.sort();
+                latestTimestamp = timestamps[timestamps.length - 1];
+            }
+        }
+
+        return {
+            status: 'success',
+            data: {
+                rowCount: sheet.getLastRow(),
+                latestTimestamp: latestTimestamp
+            }
+        };
+    } catch (error) {
+        Logger.log('ERROR in getSheetState: ' + error.stack);
+        return {
+            status: 'error',
+            message: `Failed to get sheet state: ${error.message}`
+        };
+    }
+}
+
+function getRepairData() {
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, SHEET_NAME, []);
+        if (sheet.getLastRow() < 2) return {
+            status: 'success',
+            data: []
+        };
+
+        const values = sheet.getDataRange().getDisplayValues();
+        const headers = values[0].map(h => h.trim());
+        const data = values.slice(1).map(row => {
+            return headers.reduce((obj, header, index) => {
+                if (header) obj[header] = row[index];
+                return obj;
+            }, {});
+        }).filter(obj => obj['เลขที่ใบสั่งงาน']);
+
+        data.sort((a, b) => (new Date(b['วันที่แจ้ง']).getTime() || 0) - (new Date(a['วันที่แจ้ง']).getTime() || 0));
+
+        return {
+            status: 'success',
+            data: data
+        };
+    } catch (error) {
+        Logger.log('ERROR in getRepairData: ' + error.stack);
+        return {
+            status: 'error',
+            message: `Failed to get repair data: ${error.message}`
+        };
+    }
+}
+
+function getEmployeeData() {
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, EMPLOYEE_SHEET_NAME, ['Name', 'Phone', 'Status']);
+        if (sheet.getLastRow() < 2) return {
+            status: 'success',
+            data: []
+        };
+
+        const data = sheet.getDataRange().getValues();
+        const headers = data[0].map(h => h.trim());
+        const nameCol = headers.indexOf('Name');
+        const phoneCol = headers.indexOf('Phone');
+        const statusCol = headers.indexOf('Status');
+
+        if (nameCol === -1 || statusCol === -1) {
+            return { status: 'error', message: 'Employee sheet is missing Name or Status column.' };
+        }
+
+        const employees = data.slice(1).map(row => {
+            const name = row[nameCol];
+            const status = row[statusCol];
+
+            return (name && (status === 'Active' || status === '')) ? {
+                name: name.trim(),
+                phone: (row[phoneCol] || '').toString().trim()
+            } : null;
+        }).filter(Boolean);
+
+        return {
+            status: 'success',
+            data: employees
+        };
+    } catch (error) {
+        Logger.log('ERROR in getEmployeeData: ' + error.stack);
+        return {
+            status: 'error',
+            message: `Failed to get employee data: ${error.message}`,
+            data: []
+        };
+    }
+}
+
+function getJobDetailsByDocNumber(docNumber) {
+    try {
+        if (!docNumber) return { status: 'error', message: 'Document number is required.' };
+        const sheet = SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(SHEET_NAME);
+        if (!sheet) throw new Error(`Sheet "${SHEET_NAME}" not found.`);
+
+        const values = sheet.getDataRange().getDisplayValues();
+        if (values.length < 2) return { status: 'error', message: 'No data found.' };
+
+        const headers = values[0].map(h => h.trim());
+        const docNumberColIndex = headers.indexOf('เลขที่ใบสั่งงาน');
+        if (docNumberColIndex === -1) return { status: 'error', message: 'Document number column not found.' };
+
+        const row = values.slice(1).find(r => r[docNumberColIndex] === docNumber);
+        if (!row) return { status: 'error', message: `Job with document number ${docNumber} not found.` };
+
+        const jobData = headers.reduce((obj, header, index) => {
+            if (header) obj[header] = row[index];
+            return obj;
+        }, {});
+
+        return { status: 'success', data: jobData };
+    } catch (error) {
+        Logger.log('ERROR in getJobDetailsByDocNumber: ' + error.stack);
+        return { status: 'error', message: `Failed to get job details: ${error.message}` };
+    }
+}
+
+function getDriveFileMetadata(fileIds) {
+    if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
+        return {};
+    }
+    const metadata = {};
+    fileIds.forEach(id => {
+        try {
+            const file = DriveApp.getFileById(id);
+            metadata[id] = {
+                mimeType: file.getMimeType(),
+                thumbnailLink: file.getThumbnail() ? file.getThumbnail().getUrl() : null
+            };
+        } catch (e) {
+            Logger.log(`Could not get metadata for file ID ${id}: ${e.message}`);
+            metadata[id] = { mimeType: 'application/unknown' };
+        }
+    });
+    return metadata;
+}
+
+function withAuthCheck(func, allowedRoles, authToken, ...args) {
+    const session = verifySession(authToken);
+
+    if (session.status !== 'success' || !session.data || !allowedRoles.includes(session.data.role)) {
+        Logger.log(`Permission denied for user with token ${authToken} (session: ${JSON.stringify(session.data)}) to execute ${func.name}. Allowed: ${allowedRoles.join(', ')}`);
+        return { status: 'error', message: 'Permission denied. Your session may have expired or you do not have the required role.' };
+    }
+
+    return func(session.data.email, ...args);
+}
+function addNewRepairJob(authToken, data) { return withAuthCheck(_addNewRepairJob, ['admin', 'user'], authToken, data); }
+function updateRepairJob(authToken, data) { return withAuthCheck(_updateRepairJob, ['admin'], authToken, data); }
+function assignJob(authToken, data) { return withAuthCheck(_assignJob, ['admin'], authToken, data); }
+function updateJobActionV2(authToken, data) { return withAuthCheck(_updateJobActionV2, ['admin'], authToken, data); }
+function updateJobStatus(authToken, data) { return withAuthCheck(_updateJobStatus, ['admin'], authToken, data); }
+function deleteHistoryEntry(authToken, docNumber, historyId) { return withAuthCheck(_deleteHistoryEntry, ['admin'], authToken, docNumber, historyId); }
+function editHistoryEntry(authToken, docNumber, updatedEntryData) { return withAuthCheck(_editHistoryEntry, ['admin'], authToken, docNumber, updatedEntryData); }
+function deletePhoto(authToken, docNumber, fileId) { return withAuthCheck(_deletePhoto, ['admin'], authToken, docNumber, fileId); }
+function deleteAllPhotosInSection(authToken, docNumber, targetField) { return withAuthCheck(_deleteAllPhotosInSection, ['admin'], authToken, docNumber, targetField); }
+function addFilesToJob(authToken, docNumber, filesData, targetField) { return withAuthCheck(_addFilesToJob, ['admin'], authToken, docNumber, filesData, targetField); }
+function updateMapLink(authToken, docNumber, mapLink) { return withAuthCheck(_updateMapLink, ['admin'], authToken, docNumber, mapLink); }
+
+function getUsersForManagement(authToken, sheetType) { return withAuthCheck(_getUsersForManagement, ['admin'], authToken, sheetType); }
+function updateUserRecord(authToken, recordData) { return withAuthCheck(_updateUserRecord, ['admin'], authToken, recordData); }
+function addUserRecord(authToken, recordData) { return withAuthCheck(_addUserRecord, ['admin'], authToken, recordData); }
+function deleteUserRecord(authToken, recordData) { return withAuthCheck(_deleteUserRecord, ['admin'], authToken, recordData); }
+function getSystemUsers(authToken) { return withAuthCheck(_getSystemUsers, ['admin'], authToken); }
+function addSystemUser(authToken, userData) { return withAuthCheck(_addSystemUser, ['admin'], authToken, userData); }
+function updateSystemUser(authToken, userData) { return withAuthCheck(_updateSystemUser, ['admin'], authToken, userData); }
+function deleteSystemUser(authToken, userData) { return withAuthCheck(_deleteSystemUser, ['admin'], authToken, userData); }
+function getAllSheetsDataForBackup(authToken) { return withAuthCheck(_getAllSheetsDataForBackup, ['admin'], authToken); }
+
+
+function _getAllSheetsDataForBackup(userEmail) {
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheets = ss.getSheets();
+        const allData = {};
+
+        sheets.forEach(sheet => {
+            const name = sheet.getName();
+            const range = sheet.getDataRange();
+            const values = range.getValues();
+
+            const transformedData = values.map(row =>
+                row.map(cell => {
+                    if (cell instanceof Date) {
+                        const year = parseInt(Utilities.formatDate(cell, "Asia/Bangkok", "yyyy")) + 543;
+                        return Utilities.formatDate(cell, "Asia/Bangkok", "dd/MM/") + year + Utilities.formatDate(cell, "Asia/Bangkok", " HH:mm:ss");
+                    }
+                    return cell;
+                })
+            );
+            allData[name] = transformedData;
+        });
+
+        return { status: 'success', data: allData };
+    } catch (e) {
+        Logger.log(`Error in _getAllSheetsDataForBackup: ${e.stack}`);
+        return { status: 'error', message: e.message };
+    }
+}
+
+function _addNewRepairJob(userEmail, data) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, SHEET_NAME, []);
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.trim());
+        const timestamp = new Date();
+
+        const docNumber = generateDocNumber(sheet, timestamp, 'PS');
+        const jobFolder = getOrCreateFolder(DriveApp.getFolderById(FOLDER_ID), docNumber);
+
+        const jobPhotoIds = (data.jobPhotos || []).map((photoB64, index) => {
+            return saveFileAndGetId(photoB64, `job_${docNumber}_${index + 1}`, jobFolder);
+        }).filter(id => id).join(',');
+
+        const newRowData = {
+            'เลขที่ใบสั่งงาน': docNumber,
+            'เลขที่เอกสารอ้างอิง': data.refDocNumber || '',
+            'วันที่แจ้ง': Utilities.formatDate(timestamp, "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss"),
+            'ผู้แจ้ง': data.requesterName || '',
+            'ความต้องการ': data.urgency || 'ปกติ',
+            'ประเภทการแจ้ง': data.requestType || '',
+            'ชื่อลูกค้า': data.companyName || '',
+            'เลขบิล': data.projectName || '',
+            'ผู้ติดต่อ': data.contactPerson || '',
+            'เบอร์ติดต่อ': data.contactNumber || '',
+            'ที่อยู่': data.address || '',
+            'ชื่อขนส่ง': data.transportName || '',
+            'แผนที่ (Link)': data.mapLink || '',
+            'ความพร้อมหน้างาน': '', // field kept for backward compatibility; no longer used
+            'รูปงานเคลม': jobPhotoIds,
+            'รายละเอียดงาน': data.jobDetails || '',
+            'สถานะ': (data.operatorNames && data.operatorNames.length > 0) ? "กำลังดำเนินการ" : "รอดำเนินการ",
+            'ผู้ดำเนินการ': (data.operatorNames || []).join(', '),
+            'LastModified': timestamp.toISOString()
+        };
+        sheet.appendRow(headers.map(header => newRowData[header] !== undefined ? newRowData[header] : ''));
+
+        const finalNewData = {};
+        headers.forEach(header => {
+            finalNewData[header] = newRowData[header] !== undefined ? newRowData[header] : '';
+        });
+
+        return {
+            status: 'success',
+            message: 'บันทึกข้อมูลเรียบร้อย',
+            docNumber: docNumber,
+            updatedJob: finalNewData
+        };
+    } catch (e) {
+        Logger.log('ERROR in _addNewRepairJob: ' + e.stack);
+        return {
+            status: 'error',
+            message: `เกิดข้อผิดพลาดในการบันทึก: ${e.message}`
+        };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _updateRepairJob(userEmail, data) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, SHEET_NAME, []);
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.trim());
+        const docNumber = data.docNumber;
+        if (!docNumber) return {
+            status: 'error',
+            message: 'ไม่พบเลขที่ใบงานสำหรับอัปเดต'
+        };
+
+        const docNumberColIndex = headers.indexOf('เลขที่ใบสั่งงาน');
+        const dataValues = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+        const rowIndex = dataValues.findIndex(row => row[docNumberColIndex] == docNumber);
+        if (rowIndex === -1) return {
+            status: 'error',
+            message: `ไม่พบใบงานเลขที่ ${docNumber}`
+        };
+
+        const jobFolder = getOrCreateFolder(DriveApp.getFolderById(FOLDER_ID), docNumber);
+        const photoData = data.jobPhotos || {
+            existing: [],
+            new: []
+        };
+        const existingPhotoIdsOnSheet = (dataValues[rowIndex][headers.indexOf('รูปงานเคลม')] || '').split(',').filter(id => id);
+        const photosToKeep = new Set(photoData.existing || []);
+
+        existingPhotoIdsOnSheet.forEach(fileId => {
+            if (!photosToKeep.has(fileId)) {
+                try {
+                    DriveApp.getFileById(fileId).setTrashed(true);
+                } catch (e) {
+                    Logger.log(`Could not trash file ${fileId}. Error: ${e.message}`);
+                }
+            }
+        });
+
+        const newPhotoIds = (photoData.new || []).map((photoB64, index) => {
+            return saveFileAndGetId(photoB64, `job_${docNumber}_update_${Date.now()}_${index + 1}`, jobFolder);
+        }).filter(id => id);
+        const finalPhotoIds = [...photosToKeep, ...newPhotoIds].join(',');
+
+        const currentStatus = dataValues[rowIndex][headers.indexOf('สถานะ')];
+
+        const updatedRowData = {
+            'เลขที่เอกสารอ้างอิง': data.refDocNumber,
+            'ผู้แจ้ง': data.requesterName,
+            'ความต้องการ': data.urgency,
+            'ประเภทการแจ้ง': data.requestType,
+            'ชื่อลูกค้า': data.companyName,
+            'เลขบิล': data.projectName,
+            'ผู้ติดต่อ': data.contactPerson,
+            'เบอร์ติดต่อ': data.contactNumber,
+            'ที่อยู่': data.address,
+            'ชื่อขนส่ง': data.transportName,
+            'แผนที่ (Link)': data.mapLink,
+            'ความพร้อมหน้างาน': '', // field kept for backward compatibility; no longer set from UI
+            'รูปงานเคลม': finalPhotoIds,
+            'รายละเอียดงาน': data.jobDetails,
+            'ผู้ดำเนินการ': (data.operatorNames || []).join(', '),
+            'LastModified': new Date().toISOString()
+        };
+
+        if (currentStatus === 'รอดำเนินการ' && data.operatorNames && data.operatorNames.length > 0) {
+            updatedRowData['สถานะ'] = 'กำลังดำเนินการ';
+        }
+
+        const rowToUpdate = rowIndex + 2;
+        headers.forEach((header, index) => {
+            if (updatedRowData[header] !== undefined) {
+                sheet.getRange(rowToUpdate, index + 1).setValue(updatedRowData[header]);
+            }
+        });
+
+        SpreadsheetApp.flush();
+        const updatedJobData = getJobDetailsByDocNumber(docNumber).data;
+
+        return {
+            status: 'success',
+            message: 'อัปเดตข้อมูลเรียบร้อย',
+            docNumber: docNumber,
+            updatedJob: updatedJobData
+        };
+    } catch (e) {
+        Logger.log('ERROR in _updateRepairJob: ' + e.stack);
+        return {
+            status: 'error',
+            message: `เกิดข้อผิดพลาดในการอัปเดต: ${e.message}`
+        };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _assignJob(userEmail, data) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, SHEET_NAME, []);
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.trim());
+        const {
+            docNumber,
+            operatorNames,
+            vehicleLicense
+        } = data;
+
+        if (!docNumber || !operatorNames || operatorNames.length === 0) {
+            return {
+                status: 'error',
+                message: 'ข้อมูลไม่ครบถ้วน, กรุณาระบุผู้ดำเนินการอย่างน้อย 1 คน'
+            };
+        }
+
+        const docNumberColIndex = headers.indexOf('เลขที่ใบสั่งงาน');
+        const dataValues = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+        const rowIndex = dataValues.findIndex(row => row[docNumberColIndex] == docNumber);
+
+        if (rowIndex === -1) {
+            return {
+                status: 'error',
+                message: `ไม่พบใบงานเลขที่ ${docNumber}`
+            };
+        }
+
+        const rowToUpdate = rowIndex + 2;
+        const operatorString = operatorNames.join(', ');
+
+        const fieldsToUpdate = {
+            'ผู้ดำเนินการ': operatorString,
+            'รถที่ใช้': vehicleLicense || '',
+            'สถานะ': 'กำลังดำเนินการ',
+            'LastModified': new Date().toISOString()
+        };
+
+        headers.forEach((header, index) => {
+            if (fieldsToUpdate[header] !== undefined) {
+                sheet.getRange(rowToUpdate, index + 1).setValue(fieldsToUpdate[header]);
+            }
+        });
+
+        SpreadsheetApp.flush();
+        const updatedJobData = getJobDetailsByDocNumber(docNumber).data;
+
+        return {
+            status: 'success',
+            message: 'มอบหมายงานเรียบร้อย',
+            docNumber: docNumber,
+            updatedJob: updatedJobData
+        };
+    } catch (e) {
+        Logger.log('ERROR in _assignJob: ' + e.stack);
+        return {
+            status: 'error',
+            message: `เกิดข้อผิดพลาด: ${e.message}`
+        };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _updateJobActionV2(userEmail, data) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, SHEET_NAME, []);
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.trim());
+        const docNumber = data.docNumber;
+        if (!docNumber) return { status: 'error', message: 'ไม่พบเลขที่ใบงานสำหรับอัปเดต' };
+
+        const docNumberColIndex = headers.indexOf('เลขที่ใบสั่งงาน');
+        if (docNumberColIndex === -1) return { status: 'error', message: 'ไม่พบคอลัมน์ "เลขที่ใบสั่งงาน" ใน Sheet' };
+
+        const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+        const rowIndex = allData.findIndex(row => row[docNumberColIndex] == docNumber);
+        if (rowIndex === -1) return { status: 'error', message: `ไม่พบใบงานเลขที่ ${docNumber}` };
+
+        const rowToUpdate = rowIndex + 2;
+        const historyColIndex = headers.indexOf('ActionHistory');
+        const actionPhotosColIndex = headers.indexOf('รูปภาพหลังดำเนินการ');
+
+        let history = [];
+        if (historyColIndex !== -1 && allData[rowIndex][historyColIndex]) {
+            try {
+                history = JSON.parse(allData[rowIndex][historyColIndex]);
+            } catch (e) {
+                Logger.log(`Could not parse history for ${docNumber}: ${e.message}`);
+                history = [];
+            }
+        }
+
+        const entryDate = data.actionDateTime ? new Date(data.actionDateTime) : new Date();
+        const operatorNames = Array.isArray(data.operatorNames) ? data.operatorNames.join(', ') : '';
+
+        const newHistoryEntry = {
+            date: entryDate.toISOString(),
+            status: data.actionType === 'complete' ? 'ดำเนินการเสร็จสิ้น' : 'กำลังดำเนินการ',
+            operator: operatorNames,
+            remark: data.actionType === 'complete' ? data.completionNotes : data.remark,
+            vehicle: data.vehicleLicense || '',
+            departureFromOfficeTime: data.departureFromOfficeTime || '',
+            departureFromSiteTime: data.departureFromSiteTime || '',
+            arrivalAtCompanyTime: data.arrivalAtCompanyTime || ''
+        };
+
+        history.push(newHistoryEntry);
+
+        const fields = {
+            'ActionHistory': JSON.stringify(history, null, 2),
+            'ผู้ดำเนินการ': operatorNames,
+            'รถที่ใช้': data.vehicleLicense || '',
+            'LastModified': new Date().toISOString()
+        };
+
+        if (data.actionFiles && Array.isArray(data.actionFiles) && data.actionFiles.length > 0) {
+            if (actionPhotosColIndex === -1) {
+                Logger.log('Warning: "รูปภาพหลังดำเนินการ" column not found. Action photos will not be saved.');
+            } else {
+                const jobFolder = getOrCreateFolder(DriveApp.getFolderById(FOLDER_ID), docNumber);
+                const newFileIds = data.actionFiles.map(fileData => {
+                    return saveFileAndGetId(fileData, `action_${docNumber}_${Date.now()}`, jobFolder);
+                }).filter(id => id);
+
+                const existingActionPhotos = allData[rowIndex][actionPhotosColIndex] || '';
+                const allActionPhotoIds = [existingActionPhotos, ...newFileIds].filter(id => id).join(',');
+                fields['รูปภาพหลังดำเนินการ'] = allActionPhotoIds;
+            }
+        }
+
+        if (data.actionType === 'incomplete') {
+            fields['สถานะ'] = 'กำลังดำเนินการ';
+        } else if (data.actionType === 'complete') {
+            fields['สถานะ'] = 'ดำเนินการเสร็จสิ้น';
+        }
+
+        headers.forEach((header, index) => {
+            if (fields[header] !== undefined) {
+                sheet.getRange(rowToUpdate, index + 1).setValue(fields[header]);
+            }
+        });
+
+        SpreadsheetApp.flush();
+        const updatedJobData = getJobDetailsByDocNumber(docNumber).data;
+
+        return {
+            status: 'success',
+            message: 'อัปเดตข้อมูลการดำเนินการเรียบร้อย',
+            docNumber: docNumber,
+            updatedJob: updatedJobData
+        };
+    } catch (e) {
+        Logger.log('ERROR in _updateJobActionV2: ' + e.stack);
+        return {
+            status: 'error',
+            message: `เกิดข้อผิดพลาดในการอัปเดต: ${e.message}`
+        };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _updateJobStatus(userEmail, data) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, SHEET_NAME, []);
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.trim());
+        const {
+            docNumber,
+            status: newStatus
+        } = data;
+        if (!docNumber || !newStatus) return {
+            status: 'error',
+            message: 'ข้อมูลไม่ครบถ้วนสำหรับอัปเดตสถานะ'
+        };
+
+        const docNumberColIndex = headers.indexOf('เลขที่ใบสั่งงาน');
+        if (docNumberColIndex === -1) return {
+            status: 'error',
+            message: 'ไม่พบคอลัมน์ "เลขที่ใบสั่งงาน" ใน Sheet'
+        };
+
+        const dataValues = sheet.getRange(2, docNumberColIndex + 1, sheet.getLastRow() - 1, 1).getValues();
+        const rowIndex = dataValues.findIndex(row => row[0] == docNumber);
+        if (rowIndex === -1) return {
+            status: 'error',
+            message: `ไม่พบใบงานเลขที่ ${docNumber}`
+        };
+
+        const rowToUpdate = rowIndex + 2;
+
+        const fieldsToUpdate = {
+            'สถานะ': newStatus,
+            'LastModified': new Date().toISOString()
+        };
+
+        headers.forEach((header, index) => {
+            if (fieldsToUpdate[header] !== undefined) {
+                sheet.getRange(rowToUpdate, index + 1).setValue(fieldsToUpdate[header]);
+            }
+        });
+
+        SpreadsheetApp.flush();
+        const updatedJobData = getJobDetailsByDocNumber(docNumber).data;
+
+        return {
+            status: 'success',
+            message: 'อัปเดตสถานะเรียบร้อย',
+            docNumber: docNumber,
+            updatedJob: updatedJobData
+        };
+    } catch (e) {
+        Logger.log('ERROR in _updateJobStatus: ' + e.stack);
+        return {
+            status: 'error',
+            message: `เกิดข้อผิดพลาดในการอัปเดตสถานะ: ${e.message}`
+        };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _deleteHistoryEntry(userEmail, docNumber, historyId) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, SHEET_NAME, []);
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.trim());
+
+        if (!docNumber || !historyId) {
+            return {
+                status: 'error',
+                message: 'ข้อมูลไม่ครบถ้วนสำหรับการลบประวัติ'
+            };
+        }
+
+        const docNumberColIndex = headers.indexOf('เลขที่ใบสั่งงาน');
+        const historyColIndex = headers.indexOf('ActionHistory');
+        const lastModifiedColIndex = headers.indexOf('LastModified');
+
+        if (docNumberColIndex === -1 || historyColIndex === -1) {
+            return { status: 'error', message: 'ไม่พบคอลัมน์ที่จำเป็นใน Sheet' };
+        }
+
+        const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+        const rowIndex = allData.findIndex(row => row[docNumberColIndex] == docNumber);
+        if (rowIndex === -1) return {
+            status: 'error',
+            message: `ไม่พบใบงานเลขที่ ${docNumber}`
+        };
+
+        const rowToUpdate = rowIndex + 2;
+        let history = [];
+        const historyJSON = allData[rowIndex][historyColIndex];
+
+        if (historyJSON) {
+            try {
+                history = JSON.parse(historyJSON);
+            } catch (e) {
+                Logger.log(`Could not parse history for ${docNumber} during deletion: ${e.message}`);
+                return {
+                    status: 'error',
+                    message: `ไม่สามารถประมวลผลข้อมูลประวัติได้: ${e.message}`
+                };
+            }
+        }
+
+        if (!Array.isArray(history)) {
+            return { status: 'error', message: 'ข้อมูลประวัติไม่ถูกต้อง' };
+        }
+
+        const historyIndexToDelete = history.findIndex(entry => entry && entry.date === historyId);
+
+        if (historyIndexToDelete === -1) {
+            return {
+                status: 'error',
+                message: `ไม่พบประวัติรายการที่จะลบ (ID: ${historyId})`
+            };
+        }
+
+        history.splice(historyIndexToDelete, 1);
+
+        sheet.getRange(rowToUpdate, historyColIndex + 1).setValue(JSON.stringify(history, null, 2));
+        if (lastModifiedColIndex !== -1) {
+            sheet.getRange(rowToUpdate, lastModifiedColIndex + 1).setValue(new Date().toISOString());
+        }
+
+        SpreadsheetApp.flush();
+        const updatedJobData = getJobDetailsByDocNumber(docNumber).data;
+
+        return {
+            status: 'success',
+            message: 'ลบประวัติเรียบร้อย',
+            updatedJob: updatedJobData
+        };
+
+    } catch (e) {
+        Logger.log('ERROR in _deleteHistoryEntry: ' + e.stack);
+        return {
+            status: 'error',
+            message: `เกิดข้อผิดพลาดในการลบประวัติ: ${e.message}`
+        };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _editHistoryEntry(userEmail, docNumber, updatedEntryData) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        if (!docNumber || !updatedEntryData || !updatedEntryData.originalDate) {
+            return { status: 'error', message: 'ข้อมูลไม่ครบถ้วนสำหรับการแก้ไขประวัติ' };
+        }
+
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, SHEET_NAME, []);
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.trim());
+
+        const docNumberColIndex = headers.indexOf('เลขที่ใบสั่งงาน');
+        const historyColIndex = headers.indexOf('ActionHistory');
+        const lastModifiedColIndex = headers.indexOf('LastModified');
+
+        if (docNumberColIndex === -1 || historyColIndex === -1) {
+            return { status: 'error', message: 'ไม่พบคอลัมน์ที่จำเป็นใน Sheet' };
+        }
+
+        const allData = sheet.getRange(2, 1, sheet.getLastRow(), headers.length).getValues();
+        const rowIndex = allData.findIndex(row => row[docNumberColIndex] == docNumber);
+        if (rowIndex === -1) {
+            return { status: 'error', message: `ไม่พบใบงานเลขที่ ${docNumber}` };
+        }
+
+        const rowToUpdate = rowIndex + 2;
+        let history = [];
+        const historyJSON = allData[rowIndex][historyColIndex];
+
+        if (historyJSON) {
+            try {
+                history = JSON.parse(historyJSON);
+            } catch (e) {
+                return { status: 'error', message: `ไม่สามารถประมวลผลข้อมูลประวัติได้: ${e.message}` };
+            }
+        }
+
+        if (!Array.isArray(history)) {
+            return { status: 'error', message: 'ข้อมูลประวัติไม่ถูกต้อง' };
+        }
+
+        const entryIndex = history.findIndex(entry => entry && entry.date === updatedEntryData.originalDate);
+
+        if (entryIndex === -1) {
+            return { status: 'error', message: `ไม่พบประวัติรายการที่จะแก้ไข` };
+        }
+
+        history[entryIndex].date = updatedEntryData.date;
+        history[entryIndex].status = updatedEntryData.status || history[entryIndex].status;
+        history[entryIndex].operator = updatedEntryData.operator;
+        history[entryIndex].vehicle = updatedEntryData.vehicle;
+        history[entryIndex].remark = updatedEntryData.remark;
+        history[entryIndex].departureFromOfficeTime = updatedEntryData.departureFromOfficeTime;
+        history[entryIndex].departureFromSiteTime = updatedEntryData.departureFromSiteTime;
+        history[entryIndex].arrivalAtCompanyTime = updatedEntryData.arrivalAtCompanyTime;
+
+        sheet.getRange(rowToUpdate, historyColIndex + 1).setValue(JSON.stringify(history, null, 2));
+        if (lastModifiedColIndex !== -1) {
+            sheet.getRange(rowToUpdate, lastModifiedColIndex + 1).setValue(new Date().toISOString());
+        }
+
+        SpreadsheetApp.flush();
+        const updatedJobData = getJobDetailsByDocNumber(docNumber).data;
+
+        return { status: 'success', message: 'แก้ไขประวัติเรียบร้อย', updatedJob: updatedJobData };
+
+    } catch (e) {
+        Logger.log('ERROR in _editHistoryEntry: ' + e.stack);
+        return { status: 'error', message: `เกิดข้อผิดพลาดในการแก้ไขประวัติ: ${e.message}` };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _deletePhoto(userEmail, docNumber, fileId) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        if (!docNumber || !fileId) {
+            return { status: 'error', message: 'ข้อมูลไม่ครบถ้วนสำหรับการลบรูปภาพ' };
+        }
+
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, SHEET_NAME, []);
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.trim());
+
+        const docNumberColIndex = headers.indexOf('เลขที่ใบสั่งงาน');
+        if (docNumberColIndex === -1) return { status: 'error', message: 'ไม่พบคอลัมน์ "เลขที่ใบสั่งงาน"' };
+
+        const allData = sheet.getDataRange().getValues();
+        const rowIndex = allData.findIndex(row => row[docNumberColIndex] == docNumber);
+        if (rowIndex === -1) return { status: 'error', message: `ไม่พบใบงานเลขที่ ${docNumber}` };
+
+        const rowToUpdate = rowIndex + 1;
+
+        const jobPhotosColIndex = headers.indexOf('รูปงานเคลม');
+        const actionPhotosColIndex = headers.indexOf('รูปภาพหลังดำเนินการ');
+        const relatedDocsColIndex = headers.indexOf('RelatedDocuments');
+        const lastModifiedColIndex = headers.indexOf('LastModified');
+
+        let columnUpdated = false;
+        const columnsToCheck = [jobPhotosColIndex, actionPhotosColIndex, relatedDocsColIndex];
+
+        for (const colIndex of columnsToCheck) {
+            if (colIndex !== -1) {
+                let fileIds = (allData[rowIndex][colIndex] || '').toString().split(',').filter(id => id.trim());
+                if (fileIds.includes(fileId)) {
+                    fileIds = fileIds.filter(id => id !== fileId);
+                    sheet.getRange(rowToUpdate, colIndex + 1).setValue(fileIds.join(','));
+                    columnUpdated = true;
+                    break;
+                }
+            }
+        }
+
+        if (!columnUpdated) {
+            return { status: 'error', message: 'ไม่พบไฟล์ที่ระบุในใบงานนี้' };
+        }
+
+        try {
+            DriveApp.getFileById(fileId).setTrashed(true);
+        } catch (e) {
+            Logger.log(`Could not trash file ${fileId}, but it was removed from sheet. Error: ${e.message}`);
+        }
+
+        if (lastModifiedColIndex !== -1) {
+            sheet.getRange(rowToUpdate, lastModifiedColIndex + 1).setValue(new Date().toISOString());
+        }
+
+        SpreadsheetApp.flush();
+        const updatedJobData = getJobDetailsByDocNumber(docNumber).data;
+
+        return { status: 'success', message: 'ลบไฟล์เรียบร้อย', updatedJob: updatedJobData };
+
+    } catch (e) {
+        Logger.log('ERROR in _deletePhoto: ' + e.stack);
+        return { status: 'error', message: `เกิดข้อผิดพลาดในการลบไฟล์: ${e.message}` };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _deleteAllPhotosInSection(userEmail, docNumber, targetField) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const validFields = ['รูปงานเคลม', 'รูปภาพหลังดำเนินการ', 'RelatedDocuments'];
+        if (!docNumber || !targetField || !validFields.includes(targetField)) {
+            return { status: 'error', message: 'ข้อมูลไม่ถูกต้องสำหรับการลบไฟล์ทั้งหมด' };
+        }
+
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, SHEET_NAME, []);
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.trim());
+
+        const docNumberColIndex = headers.indexOf('เลขที่ใบสั่งงาน');
+        const targetColIndex = headers.indexOf(targetField);
+        const lastModifiedColIndex = headers.indexOf('LastModified');
+
+        if (docNumberColIndex === -1 || targetColIndex === -1) {
+            return { status: 'error', message: `ไม่พบคอลัมน์ที่จำเป็น (${targetField})` };
+        }
+
+        const allData = sheet.getDataRange().getValues();
+        const rowIndex = allData.findIndex(row => row[docNumberColIndex] == docNumber);
+        if (rowIndex === -1) {
+            return { status: 'error', message: `ไม่พบใบงานเลขที่ ${docNumber}` };
+        }
+
+        const rowToUpdate = rowIndex + 1;
+        const fileIdsString = (allData[rowIndex][targetColIndex] || '').toString();
+
+        if (!fileIdsString) {
+            return { status: 'success', message: 'ไม่มีไฟล์ให้ลบ', updatedJob: getJobDetailsByDocNumber(docNumber).data };
+        }
+
+        const fileIds = fileIdsString.split(',').filter(id => id.trim());
+
+        fileIds.forEach(fileId => {
+            try {
+                DriveApp.getFileById(fileId).setTrashed(true);
+            } catch (e) {
+                Logger.log(`Could not trash file ${fileId} during bulk delete. Error: ${e.message}`);
+            }
+        });
+
+        sheet.getRange(rowToUpdate, targetColIndex + 1).setValue('');
+        if (lastModifiedColIndex !== -1) {
+            sheet.getRange(rowToUpdate, lastModifiedColIndex + 1).setValue(new Date().toISOString());
+        }
+        SpreadsheetApp.flush();
+
+        const updatedJobData = getJobDetailsByDocNumber(docNumber).data;
+        return { status: 'success', message: 'ลบไฟล์ทั้งหมดเรียบร้อย', updatedJob: updatedJobData };
+
+    } catch (e) {
+        Logger.log('ERROR in _deleteAllPhotosInSection: ' + e.stack);
+        return { status: 'error', message: `เกิดข้อผิดพลาดในการลบไฟล์ทั้งหมด: ${e.message}` };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _addFilesToJob(userEmail, docNumber, filesData, targetField) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, SHEET_NAME, []);
+        let headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.trim());
+
+        const validTargetFields = ['รูปงานเคลม', 'รูปภาพหลังดำเนินการ', 'RelatedDocuments'];
+        if (!docNumber || !filesData || !Array.isArray(filesData) || filesData.length === 0 || !targetField || !validTargetFields.includes(targetField)) {
+            return {
+                status: 'error',
+                message: 'ข้อมูลไม่ครบถ้วนหรือไม่ถูกต้องสำหรับแนบไฟล์'
+            };
+        }
+
+        const docNumberColIndex = headers.indexOf('เลขที่ใบสั่งงาน');
+        let targetColIndex = headers.indexOf(targetField);
+        const lastModifiedColIndex = headers.indexOf('LastModified');
+
+        if (targetColIndex === -1) {
+            Logger.log(`Column "${targetField}" not found. Adding it.`);
+            const lastCol = sheet.getLastColumn();
+            sheet.getRange(1, lastCol + 1).setValue(targetField);
+            targetColIndex = lastCol;
+            headers.push(targetField);
+        }
+
+        if (docNumberColIndex === -1) {
+            return {
+                status: 'error',
+                message: `ไม่พบคอลัมน์ "เลขที่ใบสั่งงาน" ใน Sheet`
+            };
+        }
+
+        const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+        const rowIndex = allData.findIndex(row => row[docNumberColIndex] == docNumber);
+        if (rowIndex === -1) {
+            return {
+                status: 'error',
+                message: `ไม่พบใบงานเลขที่ ${docNumber}`
+            };
+        }
+
+        const rowToUpdate = rowIndex + 2;
+
+        const jobFolder = getOrCreateFolder(DriveApp.getFolderById(FOLDER_ID), docNumber);
+        const newFileIds = filesData.map(fileData => {
+            const prefix = targetField.replace(/\s/g, '_');
+            return saveFileAndGetId(fileData, `${prefix}_${docNumber}_${Date.now()}`, jobFolder);
+        }).filter(id => id);
+
+        if (newFileIds.length === 0) {
+            return {
+                status: 'error',
+                message: 'ไม่สามารถบันทึกไฟล์ลง Drive ได้'
+            };
+        }
+
+        const existingPhotos = allData[rowIndex][targetColIndex] || '';
+        const allPhotoIds = [existingPhotos, ...newFileIds].filter(id => id).join(',');
+
+        sheet.getRange(rowToUpdate, targetColIndex + 1).setValue(allPhotoIds);
+        if (lastModifiedColIndex !== -1) {
+            sheet.getRange(rowToUpdate, lastModifiedColIndex + 1).setValue(new Date().toISOString());
+        }
+
+        SpreadsheetApp.flush();
+        const updatedJobData = getJobDetailsByDocNumber(docNumber).data;
+
+        return {
+            status: 'success',
+            message: 'แนบไฟล์เพิ่มเติมเรียบร้อย',
+            updatedJob: updatedJobData
+        };
+
+    } catch (e) {
+        Logger.log('ERROR in _addFilesToJob: ' + e.stack);
+        return {
+            status: 'error',
+            message: `เกิดข้อผิดพลาดในการแนบไฟล์: ${e.message}`
+        };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _updateMapLink(userEmail, docNumber, mapLink) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        if (!docNumber) {
+            return { status: 'error', message: 'ไม่พบเลขที่ใบงาน' };
+        }
+
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, SHEET_NAME, []);
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.trim());
+
+        const docNumberColIndex = headers.indexOf('เลขที่ใบสั่งงาน');
+        const mapLinkColIndex = headers.indexOf('แผนที่ (Link)');
+        const lastModifiedColIndex = headers.indexOf('LastModified');
+
+        if (docNumberColIndex === -1 || mapLinkColIndex === -1) {
+            return { status: 'error', message: 'ไม่พบคอลัมน์ที่จำเป็นใน Sheet' };
+        }
+
+        const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues();
+        const rowIndex = allData.findIndex(row => row[docNumberColIndex] == docNumber);
+
+        if (rowIndex === -1) {
+            return { status: 'error', message: `ไม่พบใบงานเลขที่ ${docNumber}` };
+        }
+
+        const rowToUpdate = rowIndex + 2;
+        sheet.getRange(rowToUpdate, mapLinkColIndex + 1).setValue(mapLink);
+        if (lastModifiedColIndex !== -1) {
+            sheet.getRange(rowToUpdate, lastModifiedColIndex + 1).setValue(new Date().toISOString());
+        }
+
+        SpreadsheetApp.flush();
+        const updatedJobData = getJobDetailsByDocNumber(docNumber).data;
+
+        return { status: 'success', message: 'อัปเดตลิงก์แผนที่เรียบร้อย', updatedJob: updatedJobData };
+
+    } catch (e) {
+        Logger.log('ERROR in _updateMapLink: ' + e.stack);
+        return { status: 'error', message: `เกิดข้อผิดพลาดในการอัปเดตลิงก์แผนที่: ${e.message}` };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+
+
+function saveFileAndGetId(fileData, baseFilename, folder) {
+    try {
+        const { base64, contentType, filename: originalFilename } = fileData;
+        if (!base64 || !contentType) {
+            Logger.log(`Missing base64 or contentType for file.`);
+            return '';
+        }
+
+        const bytes = Utilities.base64Decode(base64.split(',')[1]);
+        const blob = Utilities.newBlob(bytes, contentType, `${baseFilename}_${originalFilename}`);
+        const file = folder.createFile(blob);
+
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+        return file.getId();
+    } catch (e) {
+        Logger.log(`Error saving file: ${e.stack}`);
+        return '';
+    }
+}
+
+function generateDocNumber(sheet, timestamp, prefixCode) {
+    const year = String(timestamp.getFullYear() + 543).slice(-2);
+    const month = ('0' + (timestamp.getMonth() + 1)).slice(-2);
+    const prefix = `${prefixCode}${year}${month}-`;
+
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(h => h.trim());
+    const docNumberColIndex = headers.indexOf("เลขที่ใบสั่งงาน");
+    if (docNumberColIndex === -1) return `${prefix}0001`;
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return `${prefix}0001`;
+
+    const docNumbers = sheet.getRange(2, docNumberColIndex + 1, lastRow - 1, 1)
+        .getValues()
+        .flat()
+        .filter(id => typeof id === 'string' && id.startsWith(prefix))
+        .map(id => parseInt(id.slice(prefix.length), 10))
+        .filter(num => !isNaN(num));
+
+    const nextNumber = docNumbers.length > 0 ? Math.max(...docNumbers) + 1 : 1;
+
+    return `${prefix}${String(nextNumber).padStart(4, '0')}`;
+}
+
+function getOrCreateFolder(parentFolder, folderName) {
+    const folders = parentFolder.getFoldersByName(folderName);
+    return folders.hasNext() ? folders.next() : parentFolder.createFolder(folderName);
+}
+
+function _getUsersForManagement(userEmail, sheetType) {
+    try {
+        const sheetName = sheetType === 'transport' ? TRANSPORT_SHEET_NAME : EMPLOYEE_SHEET_NAME;
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, sheetName, ['Name', 'Phone', 'Status']);
+
+        if (sheet.getLastRow() < 2) {
+            return { status: 'success', data: [] };
+        }
+
+        const values = sheet.getDataRange().getValues();
+        const headers = values[0].map(h => h.trim());
+        const data = values.slice(1).map((row, index) => {
+            const record = headers.reduce((obj, header, i) => {
+                obj[header] = row[i];
+                return obj;
+            }, {});
+            record.originalIndex = index + 2; // Store original row number for updates
+            return record;
+        });
+
+        return { status: 'success', data: data };
+    } catch (e) {
+        Logger.log(`Error in _getUsersForManagement (${sheetType}): ${e.stack}`);
+        return { status: 'error', message: e.message };
+    }
+}
+
+function _addUserRecord(userEmail, recordData) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const { sheetType, name, phone, status } = recordData;
+        if (!sheetType || !name || !status) {
+            return { status: 'error', message: 'Missing required data.' };
+        }
+
+        const sheetName = sheetType === 'transport' ? TRANSPORT_SHEET_NAME : EMPLOYEE_SHEET_NAME;
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, sheetName, ['Name', 'Phone', 'Status']);
+
+        sheet.appendRow([name, phone, status]);
+        const newRecord = { Name: name, Phone: phone, Status: status, originalIndex: sheet.getLastRow() };
+
+        return { status: 'success', message: 'เพิ่มข้อมูลสำเร็จ', data: newRecord };
+    } catch (e) {
+        Logger.log(`Error in _addUserRecord: ${e.stack}`);
+        return { status: 'error', message: e.message };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _updateUserRecord(userEmail, recordData) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const { sheetType, originalIndex, name, phone, status } = recordData;
+        if (!sheetType || !originalIndex || !name || !status) {
+            return { status: 'error', message: 'Missing required data for update.' };
+        }
+
+        const sheetName = sheetType === 'transport' ? TRANSPORT_SHEET_NAME : EMPLOYEE_SHEET_NAME;
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, sheetName, ['Name', 'Phone', 'Status']);
+
+        sheet.getRange(originalIndex, 1).setValue(name);
+        sheet.getRange(originalIndex, 2).setValue(phone);
+        sheet.getRange(originalIndex, 3).setValue(status);
+
+        return { status: 'success', message: 'อัปเดตข้อมูลสำเร็จ', data: recordData };
+    } catch (e) {
+        Logger.log(`Error in _updateUserRecord: ${e.stack}`);
+        return { status: 'error', message: e.message };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _deleteUserRecord(userEmail, recordData) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const { sheetType, originalIndex } = recordData;
+        if (!sheetType || !originalIndex) {
+            return { status: 'error', message: 'Missing required data for deletion.' };
+        }
+
+        const sheetName = sheetType === 'transport' ? TRANSPORT_SHEET_NAME : EMPLOYEE_SHEET_NAME;
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, sheetName, ['Name', 'Phone', 'Status']);
+
+        sheet.deleteRow(originalIndex);
+
+        return { status: 'success', message: 'ลบข้อมูลสำเร็จ' };
+    } catch (e) {
+        Logger.log(`Error in _deleteUserRecord: ${e.stack}`);
+        return { status: 'error', message: e.message };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _getSystemUsers(userEmail) {
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, USERS_SHEET_NAME, ['Username', 'Password', 'Role', 'Status', 'FailedAttempts']);
+        if (sheet.getLastRow() < 2) {
+            return { status: 'success', data: [] };
+        }
+        const values = sheet.getDataRange().getValues();
+        const headers = values[0].map(h => h.trim());
+        const data = values.slice(1).map((row, index) => {
+            const record = {
+                originalIndex: index + 2,
+                Username: row[headers.indexOf('Username')],
+                Role: row[headers.indexOf('Role')],
+                Status: row[headers.indexOf('Status')],
+            };
+            return record;
+        });
+        return { status: 'success', data: data };
+    } catch (e) {
+        Logger.log(`Error in _getSystemUsers: ${e.stack}`);
+        return { status: 'error', message: e.message };
+    }
+}
+
+function _addSystemUser(userEmail, userData) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const { username, password, role, status } = userData;
+        if (!username || !password || !role || !status) {
+            return { status: 'error', message: 'ข้อมูลไม่ครบถ้วน' };
+        }
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, USERS_SHEET_NAME, ['Username', 'Password', 'Role', 'Status', 'FailedAttempts']);
+        const usernames = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues().flat();
+        if (usernames.some(u => u.toLowerCase() === username.toLowerCase())) {
+            return { status: 'error', message: 'มีชื่อผู้ใช้นี้ในระบบแล้ว' };
+        }
+        sheet.appendRow([username, password, role, status, 0]);
+        return { status: 'success', message: 'เพิ่มผู้ใช้ระบบสำเร็จ' };
+    } catch (e) {
+        Logger.log(`Error in _addSystemUser: ${e.stack}`);
+        return { status: 'error', message: e.message };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _updateSystemUser(userEmail, userData) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const { originalIndex, username, password, role, status } = userData;
+        if (!originalIndex || !username || !role || !status) {
+            return { status: 'error', message: 'ข้อมูลไม่ครบถ้วนสำหรับการอัปเดต' };
+        }
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, USERS_SHEET_NAME, ['Username', 'Password', 'Role', 'Status', 'FailedAttempts']);
+
+        sheet.getRange(originalIndex, 1).setValue(username);
+        sheet.getRange(originalIndex, 3).setValue(role);
+        sheet.getRange(originalIndex, 4).setValue(status);
+
+        if (password) { // Only update password if a new one is provided
+            sheet.getRange(originalIndex, 2).setValue(password);
+            sheet.getRange(originalIndex, 5).setValue(0); // Reset failed attempts
+        }
+
+        return { status: 'success', message: 'อัปเดตผู้ใช้ระบบสำเร็จ' };
+    } catch (e) {
+        Logger.log(`Error in _updateSystemUser: ${e.stack}`);
+        return { status: 'error', message: e.message };
+    } finally {
+        lock.releaseLock();
+    }
+}
+
+function _deleteSystemUser(userEmail, userData) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+        const { originalIndex } = userData;
+        if (!originalIndex) {
+            return { status: 'error', message: 'ข้อมูลไม่ครบถ้วนสำหรับการลบ' };
+        }
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = getOrCreateSheet(ss, USERS_SHEET_NAME, ['Username', 'Password', 'Role', 'Status', 'FailedAttempts']);
+        sheet.deleteRow(originalIndex);
+        return { status: 'success', message: 'ลบผู้ใช้ระบบสำเร็จ' };
+    } catch (e) {
+        Logger.log(`Error in _deleteSystemUser: ${e.stack}`);
+        return { status: 'error', message: e.message };
+    } finally {
+        lock.releaseLock();
+    }
+}
+function getProductDetails(productCode) {
+    if (!productCode) return { status: 'error', message: 'กรุณาระบุรหัสสินค้า' };
+    try {
+        const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+        const sheet = ss.getSheetByName(PRODUCT_SHEET_NAME);
+        if (!sheet) return { status: 'error', message: 'ไม่พบฐานข้อมูลสินค้า' };
+        const data = sheet.getDataRange().getValues();
+        const headers = data[0];
+        const rows = data.slice(1);
+        const cIdx = headers.indexOf('ProductCode'), nIdx = headers.indexOf('ProductName'), dIdx = headers.indexOf('Details');
+        const p = rows.find(r => r[cIdx].toString().trim() === productCode.toString().trim());
+        if (p) return { status: 'success', data: { code: p[cIdx], name: p[nIdx], details: p[dIdx] } };
+        return { status: 'not_found' };
+    } catch (e) { return { status: 'error', message: e.toString() }; }
+}
